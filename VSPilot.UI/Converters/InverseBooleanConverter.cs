@@ -1,4 +1,5 @@
-﻿using System;
+﻿// In VSPilot.UI.Converters namespace
+using System;
 using System.Globalization;
 using System.Windows.Data;
 
@@ -8,18 +9,18 @@ namespace VSPilot.UI.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool boolean)
+            if (value is bool boolValue)
             {
-                return !boolean;
+                return !boolValue;
             }
             return value;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool boolean)
+            if (value is bool boolValue)
             {
-                return !boolean;
+                return !boolValue;
             }
             return value;
         }

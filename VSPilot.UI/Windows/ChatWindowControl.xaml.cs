@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.IO.Packaging;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -17,19 +19,21 @@ namespace VSPilot.UI.Windows
         private ChatViewModel? ViewModel => DataContext as ChatViewModel;
         private Grid? _statusOverlay;
         private TextBlock? _statusMessage;
+        private readonly ILogger<ChatWindowControl>? _logger;
 
-        public ChatWindowControl(ILogger<ChatWindowControl>? logger = null)
+        public ChatWindowControl(ILogger<ChatWindowControl>? logger = null, AsyncPackage? package = null)
         {
             try
             {
                 Debug.WriteLine("ChatWindowControl: Constructor starting");
                 _logger = logger;
+                _package = package;
 
                 // Initialize the component
                 InitializeComponent();
                 Debug.WriteLine("ChatWindowControl: InitializeComponent completed");
 
-                // Add a status message overlay
+                // Add a status message overlay immediately
                 AddStatusMessage("VSPilot Chat is initializing...");
                 Debug.WriteLine("ChatWindowControl: Added status message");
 
@@ -38,6 +42,9 @@ namespace VSPilot.UI.Windows
                 chatInput.KeyDown += OnChatInputKeyDown;
                 clearButton.Click += OnClearButtonClick;
                 Debug.WriteLine("ChatWindowControl: Event handlers registered");
+
+                // Start initialization in the background to avoid deadlocks
+                InitializeInBackground();
             }
             catch (Exception ex)
             {
@@ -54,6 +61,54 @@ namespace VSPilot.UI.Windows
                     // Last resort if even the status message fails
                 }
             }
+        }
+
+        private void InitializeInBackground()
+        {
+            // Use FireAndForget pattern to avoid unhandled exceptions
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Simulate some work to give UI time to render
+                    await Task.Delay(500);
+
+                    // Switch to UI thread to initialize the control
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                    // Get automation service
+                    AutomationService? automationService = null;
+                    if (_package != null)
+                    {
+                        automationService = _package.GetService(typeof(AutomationService)) as AutomationService;
+                    }
+
+                    // Initialize the control
+                    Initialize(automationService);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
+
+                    // Update UI on the UI thread
+                    try
+                    {
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        UpdateStatusMessage($"Error initializing chat: {ex.Message}");
+                    }
+                    catch
+                    {
+                        // Ignore errors in error handling
+                    }
+                }
+            }, CancellationToken.None)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Debug.WriteLine($"Unhandled exception in background initialization: {t.Exception}");
+                }
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
 
         private void AddStatusMessage(string message)
@@ -96,7 +151,7 @@ namespace VSPilot.UI.Windows
             }
         }
 
-        private void UpdateStatusMessage(string message)
+        public void UpdateStatusMessage(string message)
         {
             try
             {
@@ -111,7 +166,7 @@ namespace VSPilot.UI.Windows
             }
         }
 
-        private void RemoveStatusMessage()
+        public void RemoveStatusMessage()
         {
             try
             {
@@ -142,24 +197,9 @@ namespace VSPilot.UI.Windows
                 // Start a timeout timer to detect hangs
                 StartInitializationTimeout();
 
-                // Initialize in the background to prevent UI freezing
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        chatInput.Focus();
-                        Debug.WriteLine("ChatWindowControl: Focus set to chat input");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "Error during control loading");
-                        Debug.WriteLine($"ChatWindowControl loading error: {ex.Message}");
-
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        UpdateStatusMessage($"Error loading chat: {ex.Message}");
-                    }
-                });
+                // Focus the input field - do this directly on the UI thread
+                chatInput.Focus();
+                Debug.WriteLine("ChatWindowControl: Focus set to chat input");
             }
             catch (Exception ex)
             {
@@ -189,7 +229,14 @@ namespace VSPilot.UI.Windows
                 {
                     Debug.WriteLine($"Timeout task error: {ex.Message}");
                 }
-            });
+            }, CancellationToken.None)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Debug.WriteLine($"Unhandled exception in timeout task: {t.Exception}");
+                }
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
 
         private void OnChatInputKeyDown(object sender, KeyEventArgs e)
@@ -245,7 +292,13 @@ namespace VSPilot.UI.Windows
             try
             {
                 Debug.WriteLine("ChatWindowControl: Initialize method called");
-                ThreadHelper.ThrowIfNotOnUIThread();
+
+                // We should be on the UI thread here, but let's check to be sure
+                if (!ThreadHelper.CheckAccess())
+                {
+                    Debug.WriteLine("WARNING: Initialize called from non-UI thread!");
+                    throw new InvalidOperationException("Initialize must be called from the UI thread");
+                }
 
                 if (automationService == null)
                 {
@@ -254,7 +307,7 @@ namespace VSPilot.UI.Windows
                     UpdateStatusMessage("Warning: AutomationService is not available. Some features may not work.");
                 }
 
-                // Create ViewModel with optional parameters
+                // Create ViewModel with optional parameters - this should be lightweight
                 Debug.WriteLine("ChatWindowControl: Creating ViewModel");
                 DataContext = new ChatViewModel(
                     automationService,

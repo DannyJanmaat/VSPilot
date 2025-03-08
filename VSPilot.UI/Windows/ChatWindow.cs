@@ -19,89 +19,139 @@ namespace VSPilot.UI.Windows
         private ChatViewModel? _viewModel;
         private AutomationService? _automationService;
         private readonly AsyncManualResetEvent _initializationComplete = new AsyncManualResetEvent();
+        private bool _isInitializing = false;
 
         // Default constructor required for Visual Studio tool window support
         public ChatWindow() : base(null)
         {
-            Caption = "VSPilot Chat";
-            BitmapResourceID = 301;
-            BitmapIndex = 1;
-
-            // Log initialization for diagnostics
             Debug.WriteLine("ChatWindow: Constructor called");
+            try
+            {
+                this.Caption = "VSPilot Chat";
+
+                // Don't create the control here - defer to Initialize
+                Debug.WriteLine("ChatWindow: Constructor completed");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ChatWindow: Exception in constructor: {ex.Message}");
+                Debug.WriteLine($"ChatWindow: Stack trace: {ex.StackTrace}");
+            }
         }
 
         // This is called when the window is created
         protected override void Initialize()
         {
             Debug.WriteLine("ChatWindow: Initialize method called");
-            base.Initialize();
+            try
+            {
+                base.Initialize();
 
-            // Initialize UI - Create the control but leave ViewModel initialization for later
-            _control = new ChatWindowControl();
-            Content = _control;
+                // Create a simple control with a loading message
+                _control = new ChatWindowControl(package: this.Package as AsyncPackage);
+                Content = _control;
 
-            // Add event handlers
-            _control.Loaded += OnControlLoaded;
-            _control.Unloaded += OnControlUnloaded;
+                // Add event handlers
+                _control.Loaded += OnControlLoaded;
+                _control.Unloaded += OnControlUnloaded;
 
-            Debug.WriteLine("ChatWindow: Control created and set as Content");
+                Debug.WriteLine("ChatWindow: Control created and set as Content");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ChatWindow: Exception in Initialize: {ex.Message}");
+                Debug.WriteLine($"ChatWindow: Stack trace: {ex.StackTrace}");
+
+                // Create a minimal control that shows the error
+                var grid = new System.Windows.Controls.Grid();
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    Text = $"Error initializing VSPilot Chat: {ex.Message}",
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                    TextWrapping = System.Windows.TextWrapping.Wrap,
+                    Margin = new Thickness(20)
+                };
+                grid.Children.Add(textBlock);
+                Content = grid;
+            }
         }
 
         protected override void OnClose()
         {
             Debug.WriteLine("ChatWindow: OnClose called");
-            _viewModel?.Dispose();
-            base.OnClose();
+            try
+            {
+                _viewModel?.Dispose();
+
+                if (_control != null)
+                {
+                    _control.Loaded -= OnControlLoaded;
+                    _control.Unloaded -= OnControlUnloaded;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ChatWindow: Exception in OnClose: {ex.Message}");
+            }
+            finally
+            {
+                base.OnClose();
+            }
         }
 
         private void OnControlLoaded(object sender, RoutedEventArgs e)
         {
             Debug.WriteLine("ChatWindow: OnControlLoaded event fired");
 
-            // Fix VSSDK007 warning by accessing the AsyncPackage JoinableTaskFactory directly
-            if (Package is AsyncPackage asyncPackage)
+            // Prevent multiple initializations
+            if (_isInitializing)
             {
-                var task = asyncPackage.JoinableTaskFactory.RunAsync(async () =>
+                Debug.WriteLine("ChatWindow: Already initializing, skipping");
+                return;
+            }
+
+            _isInitializing = true;
+
+            // Use FireAndForget pattern to avoid deadlocks
+            _ = Task.Run(async () =>
+            {
+                try
                 {
+                    Debug.WriteLine("ChatWindow: Starting background initialization");
+
+                    // Give the UI time to render
+                    await Task.Delay(500);
+
+                    // Initialize the ViewModel
+                    await InitializeViewModelAsync();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"ChatWindow: Error during background initialization: {ex.Message}");
+
                     try
                     {
-                        await InitializeViewModelAsync();
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"ChatWindow: Error during ViewModel initialization: {ex.Message}");
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                         await ShowErrorMessageAsync("Failed to initialize chat window", ex);
                     }
-                });
-                task.FileAndForget("VSPilot/ChatWindow");
-            }
-            else
-            {
-                // Fallback if package is not AsyncPackage (should not happen in practice)
-                InitializeViewModel();
-            }
-        }
-
-        // Synchronous fallback method
-        private void InitializeViewModel()
-        {
-            try
-            {
-                Debug.WriteLine("ChatWindow: InitializeViewModel fallback called");
-                ThreadHelper.ThrowIfNotOnUIThread();
-
-                // Create a dummy ViewModel
-                if (_control != null)
-                {
-                    _viewModel = new ChatViewModel(null, _control.chatInput);
-                    _control.DataContext = _viewModel;
+                    catch
+                    {
+                        // Ignore errors in error handling
+                    }
                 }
-            }
-            catch (Exception ex)
+                finally
+                {
+                    _isInitializing = false;
+                }
+            }, CancellationToken.None)
+            .ContinueWith(t =>
             {
-                Debug.WriteLine($"ChatWindow: Error in fallback initialization: {ex.Message}");
-            }
+                if (t.IsFaulted)
+                {
+                    Debug.WriteLine($"ChatWindow: Unhandled exception in initialization task: {t.Exception}");
+                }
+            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         }
 
         private async Task InitializeViewModelAsync()
@@ -109,47 +159,53 @@ namespace VSPilot.UI.Windows
             Debug.WriteLine("ChatWindow: InitializeViewModelAsync method started");
             try
             {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                // Clear any existing initialization
-                _automationService = null;
-                _viewModel = null;
-
-                // Get the AutomationService directly from the package
+                // Get the AutomationService on a background thread
                 _automationService = await GetAutomationServiceAsync();
+
+                // Switch to UI thread for UI updates
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
                 if (_automationService == null)
                 {
                     Debug.WriteLine("ChatWindow: Failed to get AutomationService");
-
-                    // Show error message and create a dummy ViewModel
-                    await ShowErrorMessageAsync("Could not initialize VSPilot",
-                        new InvalidOperationException("AutomationService is not available. The extension may not be properly loaded."));
 
                     // Create a placeholder ViewModel to prevent binding errors
                     if (_control != null)
                     {
                         _viewModel = new ChatViewModel(null, _control.chatInput);
                         _control.DataContext = _viewModel;
+
+                        // Update the status message in the control
+                        _control.UpdateStatusMessage("AutomationService is not available. Some features may not work.");
                     }
                     return;
                 }
 
                 Debug.WriteLine("ChatWindow: AutomationService retrieved successfully");
 
-                // Initialize the view model
+                // Initialize the view model on the UI thread
                 if (_control != null)
                 {
                     _viewModel = new ChatViewModel(_automationService, _control.chatInput);
                     _control.DataContext = _viewModel;
                     Debug.WriteLine("ChatWindow: ViewModel created and set as DataContext");
+
+                    // Remove the status message
+                    _control.RemoveStatusMessage();
                 }
 
                 Debug.WriteLine("ChatWindow: ViewModel initialization complete");
+                _initializationComplete.Set();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"ChatWindow: Exception in InitializeViewModelAsync: {ex.Message}");
+
+                // Switch to UI thread for error handling
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                _control?.UpdateStatusMessage($"Error initializing chat: {ex.Message}");
+
                 await ShowErrorMessageAsync("Failed to initialize chat window", ex);
             }
         }
@@ -157,7 +213,6 @@ namespace VSPilot.UI.Windows
         private async Task<AutomationService?> GetAutomationServiceAsync()
         {
             Debug.WriteLine("ChatWindow: GetAutomationServiceAsync called");
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
             try
             {
@@ -168,22 +223,18 @@ namespace VSPilot.UI.Windows
                     return null;
                 }
 
-                // Use base method call with explicit cast (no extension method)
-                Debug.WriteLine("ChatWindow: Using base GetService with cast");
-                object? service = ((System.IServiceProvider)package).GetService(typeof(AutomationService));
+                // Try to get the service asynchronously first
+                Debug.WriteLine("ChatWindow: Trying GetServiceAsync");
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                // Use the package's GetService method
+                Debug.WriteLine("ChatWindow: Using GetService");
+                var service = package.GetService(typeof(AutomationService)) as AutomationService;
+
                 if (service != null)
                 {
                     Debug.WriteLine("ChatWindow: Successfully got AutomationService");
-                    return (AutomationService)service;
-                }
-
-                // Try GetServiceAsync (this is built-in, not an extension method)
-                Debug.WriteLine("ChatWindow: Trying GetServiceAsync");
-                object? asyncService = await package.GetServiceAsync(typeof(AutomationService));
-                if (asyncService != null)
-                {
-                    Debug.WriteLine("ChatWindow: Successfully got AutomationService using GetServiceAsync");
-                    return (AutomationService)asyncService;
+                    return service;
                 }
 
                 Debug.WriteLine("ChatWindow: AutomationService not found");
@@ -211,34 +262,18 @@ namespace VSPilot.UI.Windows
             Debug.WriteLine($"ChatWindow: ShowErrorMessageAsync - {message}, Exception: {ex.Message}");
             try
             {
+                // Make sure we're on the UI thread
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                // Use base IServiceProvider interface to avoid extension method ambiguity
-                Debug.WriteLine("ChatWindow: Using IServiceProvider directly");
-                object? shellService = ((System.IServiceProvider)Package).GetService(typeof(SVsUIShell));
-                if (shellService != null)
-                {
-                    IVsUIShell uiShell = (IVsUIShell)shellService;
-                    Guid clsid = Guid.Empty;
-                    uiShell.ShowMessageBox(
-                        0,
-                        ref clsid,
-                        "VSPilot Error",
-                        $"{message}\n\nDetails: {ex.Message}",
-                        string.Empty,
-                        0,
-                        OLEMSGBUTTON.OLEMSGBUTTON_OK,
-                        OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST,
-                        OLEMSGICON.OLEMSGICON_CRITICAL,
-                        0,
-                        out int result
-                    );
-                    Debug.WriteLine("ChatWindow: Error message box displayed");
-                }
-                else
-                {
-                    Debug.WriteLine("ChatWindow: Failed to get IVsUIShell service for error display");
-                }
+                // Use a simple MessageBox instead of IVsUIShell to avoid potential deadlocks
+                MessageBox.Show(
+                    $"{message}\n\nDetails: {ex.Message}",
+                    "VSPilot Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+
+                Debug.WriteLine("ChatWindow: Error message box displayed");
             }
             catch (Exception msgEx)
             {

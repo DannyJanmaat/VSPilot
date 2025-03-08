@@ -93,36 +93,33 @@ namespace VSPilot.UI.Commands
         /// <param name="e">Event args.</param>
         private void Execute(object sender, EventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             Debug.WriteLine("ChatWindowCommand: Execute method called");
 
-            _package.JoinableTaskFactory.RunAsync(async () =>
+            try
             {
-                try
+                // Get the instance number 0 of this tool window. This window is single instance so this instance
+                // is actually the only one.
+                // The last flag is set to true so that if the tool window does not exists it will be created.
+                ToolWindowPane window = _package.FindToolWindow(typeof(ChatWindow), 0, true);
+                Debug.WriteLine("ChatWindowCommand: Found/created tool window");
+
+                if ((null == window) || (null == window.Frame))
                 {
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                    // Simply show the tool window without diagnostic message boxes
-                    ToolWindowPane window = await _package.ShowToolWindowAsync(
-                        typeof(ChatWindow),
-                        0,
-                        true,
-                        _package.DisposalToken);
-
-                    if (window?.Frame == null)
-                    {
-                        Debug.WriteLine("ChatWindowCommand: Window or frame is null");
-                        return;
-                    }
-
-                    var windowFrame = (IVsWindowFrame)window.Frame;
-                    Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(windowFrame.Show());
+                    Debug.WriteLine("ChatWindowCommand: Window or frame is null");
+                    throw new NotSupportedException("Cannot create tool window");
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"ChatWindowCommand: Exception in Execute - {ex.Message}");
-                    await ShowErrorMessageAsync("Error opening chat window", ex);
-                }
-            }).FileAndForget("ChatWindowCommand/Execute");
+
+                IVsWindowFrame frame = (IVsWindowFrame)window.Frame;
+                Debug.WriteLine("ChatWindowCommand: Got window frame, showing window");
+                Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(frame.Show());
+                Debug.WriteLine("ChatWindowCommand: Window shown successfully");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"ChatWindowCommand: Exception in Execute: {ex.Message}");
+                Debug.WriteLine($"ChatWindowCommand: Stack trace: {ex.StackTrace}");
+            }
         }
 
         private async Task ExecuteAsync()
