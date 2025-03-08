@@ -49,6 +49,10 @@ namespace VSPilot.UI.Commands
 
                 // Get the OleMenuCommandService directly from the package
                 OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
+                if (commandService == null)
+                {
+                    throw new InvalidOperationException("Failed to get IMenuCommandService");
+                }
                 if (commandService != null)
                 {
                     Debug.WriteLine("ChatWindowCommand: Successfully got IMenuCommandService");

@@ -37,10 +37,19 @@ namespace VSPilot.Core.AI
             ThreadHelper.ThrowIfNotOnUIThread();
 
             // Get DTE service
+            // Fix for CS8600: Converting null literal or possible null value to non-nullable type.
             _dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE2;
+            if (_dte == null)
+            {
+                _logger.LogWarning("DTE service not available");
+            }
 
             // Try to get AsyncPackage service, but don't throw if it's not available
             _package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
+            if (_package == null)
+            {
+                _logger.LogWarning("AsyncPackage service not available");
+            }
 
             // Initialize HttpClient
             _httpClient = new HttpClient();
@@ -215,7 +224,7 @@ namespace VSPilot.Core.AI
 
                 _ = response.EnsureSuccessStatusCode();
                 string responseContent = await response.Content.ReadAsStringAsync();
-                dynamic responseObject = JsonSerializer.Deserialize<dynamic>(responseContent);
+                dynamic? responseObject = JsonSerializer.Deserialize<dynamic>(responseContent);
 
                 return responseObject?.choices?[0]?.message?.content?.ToString() ?? throw new AutomationException("Invalid AI response format");
             }

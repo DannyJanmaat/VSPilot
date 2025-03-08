@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);VSIXCompatibility1001</MSBuildWarningsAsMessages>
+    <NoWarn>$(NoWarn);VSIXCompatibility1001</NoWarn>
+  </PropertyGroup>
+</Project>

@@ -154,7 +154,7 @@ namespace VSPilot.UI.Windows
             }
         }
 
-        private async Task<AutomationService> GetAutomationServiceAsync()
+        private async Task<AutomationService?> GetAutomationServiceAsync()
         {
             Debug.WriteLine("ChatWindow: GetAutomationServiceAsync called");
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -170,7 +170,7 @@ namespace VSPilot.UI.Windows
 
                 // Use base method call with explicit cast (no extension method)
                 Debug.WriteLine("ChatWindow: Using base GetService with cast");
-                object service = ((System.IServiceProvider)package).GetService(typeof(AutomationService));
+                object? service = ((System.IServiceProvider)package).GetService(typeof(AutomationService));
                 if (service != null)
                 {
                     Debug.WriteLine("ChatWindow: Successfully got AutomationService");
@@ -179,7 +179,7 @@ namespace VSPilot.UI.Windows
 
                 // Try GetServiceAsync (this is built-in, not an extension method)
                 Debug.WriteLine("ChatWindow: Trying GetServiceAsync");
-                object asyncService = await package.GetServiceAsync(typeof(AutomationService));
+                object? asyncService = await package.GetServiceAsync(typeof(AutomationService));
                 if (asyncService != null)
                 {
                     Debug.WriteLine("ChatWindow: Successfully got AutomationService using GetServiceAsync");
@@ -215,7 +215,7 @@ namespace VSPilot.UI.Windows
 
                 // Use base IServiceProvider interface to avoid extension method ambiguity
                 Debug.WriteLine("ChatWindow: Using IServiceProvider directly");
-                object shellService = ((System.IServiceProvider)Package).GetService(typeof(SVsUIShell));
+                object? shellService = ((System.IServiceProvider)Package).GetService(typeof(SVsUIShell));
                 if (shellService != null)
                 {
                     IVsUIShell uiShell = (IVsUIShell)shellService;

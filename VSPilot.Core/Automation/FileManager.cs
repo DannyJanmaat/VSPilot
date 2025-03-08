@@ -473,7 +473,7 @@ namespace VSPilot.Core.Automation
             try
             {
                 // Try to find the active project first
-                EnvDTE.Project activeProject = null;
+                EnvDTE.Project? activeProject = null;
 
                 if (_dte.ActiveSolutionProjects is Array activeSolutionProjects &&
                     activeSolutionProjects.Length > 0)

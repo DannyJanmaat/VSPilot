@@ -45,6 +45,11 @@ namespace VSPilot.UI.Commands
 
                 // Get the command service directly from the package
                 OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
+                if (commandService == null)
+                {
+                    Debug.WriteLine("SettingsCommand: Failed to get IMenuCommandService!");
+                    return;
+                }
                 if (commandService != null)
                 {
                     Debug.WriteLine("SettingsCommand: Successfully got IMenuCommandService");
