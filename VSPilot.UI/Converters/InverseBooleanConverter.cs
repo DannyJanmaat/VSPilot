@@ -1,5 +1,4 @@
-﻿// In VSPilot.UI.Converters namespace
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows.Data;
 

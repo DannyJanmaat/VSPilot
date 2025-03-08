@@ -223,12 +223,10 @@ namespace VSPilot.UI.Windows
                     return null;
                 }
 
-                // Try to get the service asynchronously first
-                Debug.WriteLine("ChatWindow: Trying GetServiceAsync");
+                // Switch to UI thread
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                // Use the package's GetService method
-                Debug.WriteLine("ChatWindow: Using GetService");
+                // Use direct cast instead of generic method
                 var service = package.GetService(typeof(AutomationService)) as AutomationService;
 
                 if (service != null)

@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.IO.Packaging;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -19,7 +18,7 @@ namespace VSPilot.UI.Windows
         private ChatViewModel? ViewModel => DataContext as ChatViewModel;
         private Grid? _statusOverlay;
         private TextBlock? _statusMessage;
-        private readonly ILogger<ChatWindowControl>? _logger;
+        private AsyncPackage? _package;
 
         public ChatWindowControl(ILogger<ChatWindowControl>? logger = null, AsyncPackage? package = null)
         {
@@ -212,15 +211,15 @@ namespace VSPilot.UI.Windows
         {
             _ = Task.Run(async () =>
             {
-                try
-                {
-                    // Wait 10 seconds
-                    await Task.Delay(10000);
+            try
+            {
+                // Wait 10 seconds
+                await Task.Delay(10000);
 
-                    // If we still have the status message, the initialization might be hanging
-                    if (_statusMessage != null)
-                    {
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                // If we still have the status message, the initialization might be hanging
+                if (_statusMessage != null)
+                {
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                         UpdateStatusMessage("Initialization is taking longer than expected. You may need to restart Visual Studio.");
                         Debug.WriteLine("ChatWindowControl: Initialization timeout detected");
                     }
