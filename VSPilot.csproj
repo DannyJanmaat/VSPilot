@@ -62,6 +62,9 @@
     <Compile Include="VSPilot.Core\AI\IVSPilotAIIntegration.cs" />
     <Compile Include="VSPilot.Core\AI\VSPilotIntegration.cs" />
     <Compile Include="VSPilot.Core\Build\MockTestPlatform.cs" />
+    <Compile Include="VSPilot.UI\Dialogs\SettingsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="VSPilot.UI\Windows\FrameControl.cs" />
     <Compile Include="VSPilotPackage.cs" />
     <Compile Include="VSPilotGuids.cs" />

@@ -9,7 +9,8 @@ using VSPilot.UI.ViewModels;
 using Task = System.Threading.Tasks.Task;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
-using VSPilot.Common.Utilities; // Add the ConsoleHelper namespace
+using VSPilot.Common.Utilities;
+using VSPilot.UI.Dialogs; // Add this for the new SettingsDialog
 
 namespace VSPilot.UI.Commands
 {
@@ -17,18 +18,15 @@ namespace VSPilot.UI.Commands
     {
         private readonly AsyncPackage _package;
         private readonly IServiceProvider _serviceProvider;
-        private readonly ConfigurationService _configService;
         private readonly ILoggerFactory _loggerFactory;
 
         public SettingsCommand(
             AsyncPackage package,
             IServiceProvider serviceProvider,
-            ConfigurationService configService,
             ILoggerFactory loggerFactory)
         {
             _package = package ?? throw new ArgumentNullException(nameof(package));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-            _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             LogExtended($"SettingsCommand: Constructor called for package {_package.GetType().FullName}");
         }
@@ -52,19 +50,18 @@ namespace VSPilot.UI.Commands
                 }
                 LogExtendedStatic("SettingsCommand: Successfully got IMenuCommandService");
 
-                // Get required services
+                // Get required services - simplified to avoid dependency on ConfigurationService
                 var serviceProvider = await package.GetServiceAsync(typeof(IServiceProvider)) as IServiceProvider;
-                var configService = package.GetService<ConfigurationService, ConfigurationService>();
                 var loggerFactory = package.GetService<ILoggerFactory, ILoggerFactory>();
 
-                if (serviceProvider == null || configService == null || loggerFactory == null)
+                if (serviceProvider == null || loggerFactory == null)
                 {
                     LogExtendedStatic("SettingsCommand: Failed to resolve required services!");
                     return;
                 }
 
-                // Create command instance
-                Instance = new SettingsCommand(package, serviceProvider, configService, loggerFactory);
+                // Create command instance with simplified dependencies
+                Instance = new SettingsCommand(package, serviceProvider, loggerFactory);
 
                 // Create command ID
                 var menuCommandID = new CommandID(VSPilot.VSPilotGuids.CommandSet, VSPilot.VSPilotIds.SettingsCommandId);
@@ -94,25 +91,22 @@ namespace VSPilot.UI.Commands
 
             try
             {
-                LogExtended("SettingsCommand: Creating SettingsViewModel");
-                var settingsLogger = _loggerFactory.CreateLogger<SettingsViewModel>();
+                LogExtended("SettingsCommand: Creating SettingsDialog");
 
-                LogExtended("SettingsCommand: Creating SettingsWindow");
-                var window = new SettingsWindow(_configService, settingsLogger)
-                {
-                    DataContext = new SettingsViewModel(_configService, settingsLogger)
-                };
+                // Use the simpler WinForms-based SettingsDialog instead of WPF
+                var settingsDialog = new SettingsDialog();
 
-                LogExtended("SettingsCommand: Showing SettingsWindow dialog");
-                window.ShowDialog();
-                LogExtended("SettingsCommand: SettingsWindow dialog closed");
+                LogExtended("SettingsCommand: Showing SettingsDialog");
+                settingsDialog.ShowDialog();
+
+                LogExtended("SettingsCommand: SettingsDialog closed");
             }
             catch (Exception ex)
             {
                 LogExtended($"SettingsCommand: Exception in Execute: {ex.Message}");
                 LogExtended($"SettingsCommand: Stack trace: {ex.StackTrace}");
                 var logger = _loggerFactory.CreateLogger<SettingsCommand>();
-                logger?.LogError(ex, "Error opening settings window");
+                logger?.LogError(ex, "Error opening settings dialog");
                 MessageBox.Show(
                     $"Could not open settings: {ex.Message}",
                     "VSPilot Settings Error",

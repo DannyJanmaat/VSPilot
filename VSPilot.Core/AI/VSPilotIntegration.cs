@@ -54,12 +54,63 @@ namespace VSPilot.Core.AI
             }
         }
 
-        // Add this new method for direct chat responses
+        private async Task<string> GetCopilotResponseAsync(string prompt)
+        {
+            try
+            {
+                // Check if GitHub Copilot is enabled
+                string settingsPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "VSPilot",
+                    "settings.txt");
+
+                bool useCopilot = false;
+                if (File.Exists(settingsPath))
+                {
+                    string[] lines = File.ReadAllLines(settingsPath);
+                    foreach (string line in lines)
+                    {
+                        if (line.StartsWith("UseGitHubCopilot=true"))
+                        {
+                            useCopilot = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!useCopilot)
+                {
+                    return null;
+                }
+
+                // This is a placeholder for actual GitHub Copilot integration
+                // In a real implementation, you would use the GitHub Copilot API
+                // or integrate with the Visual Studio GitHub Copilot extension
+
+                _logger.LogInformation("Using GitHub Copilot for response");
+
+                // For now, just return a message indicating we would use Copilot
+                return "GitHub Copilot integration is not yet implemented. This would use the GitHub Copilot API in a real implementation.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Copilot response");
+                return null;
+            }
+        }
+
         public async Task<string> GetDirectResponseAsync(string prompt)
         {
             try
             {
                 _logger.LogInformation("Getting direct response for chat prompt");
+
+                // Try GitHub Copilot first if enabled
+                string copilotResponse = await GetCopilotResponseAsync(prompt);
+                if (!string.IsNullOrEmpty(copilotResponse))
+                {
+                    return copilotResponse;
+                }
 
                 // Format the prompt for chat
                 string chatPrompt = $"Respond to this user query in the context of a Visual Studio extension for code automation: {prompt}";
@@ -189,47 +240,77 @@ namespace VSPilot.Core.AI
 
         private async Task<string> GetAIResponseAsync(string prompt)
         {
-            if (string.IsNullOrEmpty(_apiKey))
+            // Check for OpenAI API key
+            string apiKey = _apiKey;
+            if (string.IsNullOrEmpty(apiKey))
             {
-                _logger.LogWarning("API key is not set");
-                return "API key is not configured. Please set the VSPILOT_API_KEY environment variable.";
+                apiKey = Environment.GetEnvironmentVariable("VSPILOT_API_KEY");
+            }
+
+            // Check for Anthropic API key as a fallback
+            string anthropicKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+
+            if (string.IsNullOrEmpty(apiKey) && string.IsNullOrEmpty(anthropicKey))
+            {
+                _logger.LogWarning("No API keys configured");
+                return "API key is not configured. Please set the VSPILOT_API_KEY environment variable or configure it in VSPilot Settings.";
             }
 
             try
             {
-                var request = new
+                // Try OpenAI first if the key is available
+                if (!string.IsNullOrEmpty(apiKey))
                 {
-                    model = "gpt-4",
-                    messages = new[]
+                    var request = new
                     {
-                        new { role = "system", content = "You are a Visual Studio extension helping with code automation." },
-                        new { role = "user", content = prompt }
-                    },
-                    temperature = 0.7,
-                    max_tokens = 2000
-                };
+                        model = "gpt-4",
+                        messages = new[]
+                        {
+                    new { role = "system", content = "You are a Visual Studio extension helping with code automation." },
+                    new { role = "user", content = prompt }
+                },
+                        temperature = 0.7,
+                        max_tokens = 2000
+                    };
 
-                var content = new StringContent(
-                    JsonSerializer.Serialize(request),
-                    Encoding.UTF8,
-                    "application/json");
+                    // Set the authorization header
+                    _httpClient.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
-                var response = await _httpClient.PostAsync(API_ENDPOINT, content);
-                response.EnsureSuccessStatusCode();
+                    var content = new StringContent(
+                        JsonSerializer.Serialize(request),
+                        Encoding.UTF8,
+                        "application/json");
 
-                var responseBody = await response.Content.ReadAsStringAsync();
-                var responseObject = JsonSerializer.Deserialize<JsonElement>(responseBody);
+                    var response = await _httpClient.PostAsync(API_ENDPOINT, content);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var responseBody = await response.Content.ReadAsStringAsync();
+                        var responseObject = JsonSerializer.Deserialize<JsonElement>(responseBody);
 
-                // Extract the message content from the response
-                if (responseObject.TryGetProperty("choices", out var choices) &&
-                    choices.GetArrayLength() > 0 &&
-                    choices[0].TryGetProperty("message", out var message) &&
-                    message.TryGetProperty("content", out var content_value))
-                {
-                    return content_value.GetString();
+                        // Extract the message content from the response
+                        if (responseObject.TryGetProperty("choices", out var choices) &&
+                            choices.GetArrayLength() > 0 &&
+                            choices[0].TryGetProperty("message", out var message) &&
+                            message.TryGetProperty("content", out var content_value))
+                        {
+                            return content_value.GetString();
+                        }
+                    }
                 }
 
-                return "Failed to parse AI response.";
+                // Try Anthropic if OpenAI failed or key not available
+                if (!string.IsNullOrEmpty(anthropicKey))
+                {
+                    _logger.LogInformation("Using Anthropic API");
+
+                    // This is a placeholder for Anthropic API integration
+                    // In a real implementation, you would use the Anthropic API
+
+                    return "Anthropic API integration is not yet implemented. This would use the Anthropic API in a real implementation.";
+                }
+
+                return "Failed to get AI response. Please check your API keys.";
             }
             catch (Exception ex)
             {
@@ -237,6 +318,7 @@ namespace VSPilot.Core.AI
                 throw new AutomationException("Failed to get AI response", ex);
             }
         }
+
 
         private ProjectChanges ParseProjectChanges(string response)
         {
