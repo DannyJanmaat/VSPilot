@@ -1,0 +1,15 @@
+; Binding redirect for EnvDTE
+[$RootKey$\RuntimeConfiguration\dependentAssembly\bindingRedirection\{B03F5F7F-11D5-0A3A-EnvDTE}]
+"name"="EnvDTE"
+"publicKeyToken"="b03f5f7f11d50a3a"
+"culture"="neutral"
+"oldVersion"="0.0.0.0-8.0.0.0"
+"newVersion"="8.0.0.0"
+
+; Binding redirect for System.Diagnostics.DiagnosticSource
+[$RootKey$\RuntimeConfiguration\dependentAssembly\bindingRedirection\{CC7B13FF-CD2D-DD51-DiagnosticSource}]
+"name"="System.Diagnostics.DiagnosticSource"
+"publicKeyToken"="cc7b13ffcd2ddd51"
+"culture"="neutral"
+"oldVersion"="0.0.0.0-9.0.0.2"
+"newVersion"="9.0.0.2"

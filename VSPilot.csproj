@@ -8,6 +8,10 @@
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <!-- Add this property to include NuGet packages in the VSIX -->
+    <IncludePackagesInVSIX>true</IncludePackagesInVSIX>
+    <!-- Suppress the extension compatibility warning -->
+    <NoWarn>IDE0130;CS8618;CS8601;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;IDE0059;IDE0060;IDE0079;IDE0018;IDE1006;VSTHRD010;VSX1000</NoWarn>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -40,7 +44,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <NoWarn>IDE0130;CS8618;CS8601;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;IDE0059;IDE0060;IDE0079;IDE0018;IDE1006;VSTHRD010</NoWarn>
+    <NoWarn>IDE0130;CS8618;CS8601;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;IDE0059;IDE0060;IDE0079;IDE0018;IDE1006;VSTHRD010;VSX1000</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -49,11 +53,12 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <NoWarn>IDE0130;CS8618;CS8601;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;VSTHRD010</NoWarn>
+    <NoWarn>IDE0130;CS8618;CS8601;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;VSTHRD010;VSX1000</NoWarn>
   </PropertyGroup>
   <!-- Core infrastructure files -->
   <ItemGroup>
     <Compile Include="VSPackage.Designer.cs" />
+    <Compile Include="VSPilot.Core\Build\MockTestPlatform.cs" />
     <Compile Include="VSPilotPackage.cs" />
     <Compile Include="VSPilotGuids.cs" />
     <Compile Include="AssemblyInfo.cs" />
@@ -178,6 +183,22 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
+	<Content Include="$(NuGetPackageRoot)system.diagnostics.diagnosticsource\9.0.2\lib\net462\System.Diagnostics.DiagnosticSource.dll">
+	  <IncludeInVSIX>true</IncludeInVSIX>
+	  <VSIXSubPath>.</VSIXSubPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	</Content>
+    <!-- Add the pkgdef file -->
+    <Content Include="VSPilot.pkgdef">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <!-- Add app.config -->
+    <None Include="app.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Explicitly exclude the problematic assembly -->
+    <ReferencePath Remove="$(NuGetPackageRoot)**\Microsoft.VisualStudio.Web.BrowserLink.12.0.dll" />
   </ItemGroup>
   <!-- VSCT compilation -->
   <ItemGroup>
@@ -205,6 +226,11 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
+    <!-- Add explicit reference to System.Diagnostics.DiagnosticSource -->
+    <Reference Include="System.Diagnostics.DiagnosticSource">
+	  <HintPath>$(NuGetPackageRoot)system.diagnostics.diagnosticsource\9.0.2\lib\net462\System.Diagnostics.DiagnosticSource.dll</HintPath>
+	  <Private>True</Private>
+    </Reference>
   </ItemGroup>
   <!-- NuGet package references -->
   <ItemGroup>
@@ -245,6 +271,40 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Primitives" Version="9.0.2" />
   </ItemGroup>
+  <!-- Add this target to ensure NuGet packages are included in the VSIX -->
+  <Target Name="IncludeNuGetPackageReferences" AfterTargets="GetVsixSourceItems">
+    <ItemGroup>
+      <VSIXSourceItem Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.NuGetPackageId)'!='' and '%(ReferenceCopyLocalPaths.Extension)'=='.dll'" />
+    </ItemGroup>
+  </Target>
+  <!-- Add this target to find and copy the DiagnosticSource assembly -->
+  <Target Name="CopyDiagnosticSourceAssembly" BeforeTargets="Build">
+    <PropertyGroup>
+      <DiagnosticSourceVersion>9.0.2</DiagnosticSourceVersion>
+      <DiagnosticSourcePackagePath>$(NuGetPackageRoot)system.diagnostics.diagnosticsource\$(DiagnosticSourceVersion)</DiagnosticSourcePackagePath>
+    </PropertyGroup>
+    <!-- Try to find the assembly in various possible locations -->
+    <ItemGroup>
+      <DiagnosticSourceLocations Include="$(DiagnosticSourcePackagePath)\lib\net6.0\System.Diagnostics.DiagnosticSource.dll" />
+      <DiagnosticSourceLocations Include="$(DiagnosticSourcePackagePath)\lib\net462\System.Diagnostics.DiagnosticSource.dll" />
+      <DiagnosticSourceLocations Include="$(DiagnosticSourcePackagePath)\lib\netstandard2.0\System.Diagnostics.DiagnosticSource.dll" />
+      <DiagnosticSourceLocations Include="$(DiagnosticSourcePackagePath)\lib\net472\System.Diagnostics.DiagnosticSource.dll" />
+      <DiagnosticSourceLocations Include="$(DiagnosticSourcePackagePath)\lib\netstandard2.1\System.Diagnostics.DiagnosticSource.dll" />
+    </ItemGroup>
+    <!-- Find the first existing file -->
+    <PropertyGroup>
+      <DiagnosticSourceDllPath>@(DiagnosticSourceLocations-&gt;Exists())</DiagnosticSourceDllPath>
+    </PropertyGroup>
+    <!-- Copy the file if found -->
+    <Copy SourceFiles="$(DiagnosticSourceDllPath)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" Condition="Exists('$(DiagnosticSourceDllPath)')" />
+    <!-- Show a warning if the file wasn't found -->
+    <Warning Text="System.Diagnostics.DiagnosticSource.dll not found in any of the expected locations. Package loading may fail." Condition="!Exists('$(DiagnosticSourceDllPath)')" />
+  </Target>
+  <!-- Add a target to analyze package dependencies -->
+  <Target Name="AnalyzePackageDependencies" AfterTargets="Build">
+    <Message Importance="high" Text="Analyzing package dependencies..." />
+    <Message Importance="high" Text="%(ReferencePath.NuGetPackageId) -&gt; %(ReferencePath.Filename)" Condition="'%(ReferencePath.Filename)' == 'Microsoft.VisualStudio.Web.BrowserLink.12.0'" />
+  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="'$(VSToolsPath)' != ''" />
 </Project>

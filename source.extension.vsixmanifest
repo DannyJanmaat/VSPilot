@@ -56,5 +56,9 @@ Key Features:
 		<Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="VSPilot" Path="bin\$(Configuration)\VSPilot.dll" />
 		<Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="VSPilot" Path="bin\$(Configuration)\VSPilot.dll" />
 		<Asset Type="Microsoft.VisualStudio.Content" d:Source="File" Path="LICENSE.txt" />
+		<!-- Add the pkgdef file as an asset -->
+		<Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="File" Path="VSPilot.pkgdef" />
+		<!-- Add the System.Diagnostics.DiagnosticSource assembly as an asset -->
+		<Asset Type="Microsoft.VisualStudio.Assembly" d:Source="File" Path="System.Diagnostics.DiagnosticSource.dll" AssemblyName="System.Diagnostics.DiagnosticSource, Version=9.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51" />
 	</Assets>
 </PackageManifest>

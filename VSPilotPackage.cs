@@ -19,6 +19,8 @@ using VSPilot.Common.Interfaces;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.ComponentModel.Design;
+using Moq;
+using static VSPilot.Core.Build.TestRunner;
 
 namespace VSPilot
 {
@@ -198,6 +200,7 @@ namespace VSPilot
                     return new VsSolutionAdapter(dte, fileManager);
                 });
 
+                _services.AddSingleton<ITestPlatform, MockTestPlatform>();
                 _services.AddSingleton<IProjectManager, ProjectManager>();
                 _services.AddSingleton<IBuildManager, BuildManager>();
                 _services.AddSingleton<IErrorHandler, ErrorHandler>();

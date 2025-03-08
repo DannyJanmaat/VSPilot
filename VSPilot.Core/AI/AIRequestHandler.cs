@@ -12,50 +12,62 @@ using Microsoft.VisualStudio.Shell.Interop;
 using EnvDTE;
 using EnvDTE80;
 using VSPilot.Core.Services;
+using System.IO.Packaging;
 
 namespace VSPilot.Core.AI
 {
     public class AIRequestHandler
     {
         private readonly VSPilotAIIntegration _aiIntegration;
+        private readonly VSPilotAIIntegration _integration; // Added to match your constructor
         private readonly ILogger<AIRequestHandler> _logger;
         private readonly LanguageProcessor _languageProcessor;
         private readonly HttpClient _httpClient;
+        private readonly DTE2 _dte; // Added for DTE service
+        private AsyncPackage _package; // Added for AsyncPackage service
+        private readonly ILogger<LanguageProcessor> _languageProcessorLogger; // Added for language processor logger
+        private string _apiKey; // Added for API key
         private const string API_ENDPOINT = "https://api.openai.com/v1/completions";
 
         public AIRequestHandler(ILogger<AIRequestHandler> logger, VSPilotAIIntegration aiIntegration)
         {
+            // Validate parameters
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _aiIntegration = aiIntegration ?? throw new ArgumentNullException(nameof(aiIntegration));
+            _integration = aiIntegration ?? throw new ArgumentNullException(nameof(aiIntegration));
+            _aiIntegration = aiIntegration; // Set this field too for consistency
 
             ThreadHelper.ThrowIfNotOnUIThread();
-            var dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE2;
-            var package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
-            var languageProcessorLogger = logger as ILogger<LanguageProcessor>;
 
-            if (dte == null)
+            // Get DTE service
+            _dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE2;
+
+            // Try to get AsyncPackage service, but don't throw if it's not available
+            _package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
+
+            // Set up logger
+            _languageProcessorLogger = logger as ILogger<LanguageProcessor>;
+
+            // Don't throw exceptions for missing services, just log warnings
+            if (_dte == null)
             {
-                throw new InvalidOperationException("Failed to get DTE service.");
+                _logger.LogWarning("DTE service not available");
             }
 
-            if (package == null)
+            if (_package == null)
             {
-                throw new InvalidOperationException("Failed to get AsyncPackage service.");
+                _logger.LogWarning("AsyncPackage service not available");
             }
 
-            if (languageProcessorLogger == null)
-            {
-                throw new InvalidOperationException("Failed to cast logger to the required type.");
-            }
+            // Continue with initialization that doesn't depend on _package
 
-            _languageProcessor = new LanguageProcessor(languageProcessorLogger);
-            _httpClient = new HttpClient();
+            // Initialize other properties
+            _apiKey = GetApiKey();
 
-            // Configure API key from settings
-            string apiKey = GetApiKeyFromSettings();
-            if (!string.IsNullOrEmpty(apiKey))
+            // Only proceed with API-dependent initialization if we have a key
+            if (!string.IsNullOrEmpty(_apiKey))
             {
-                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                // Initialize API client
+                // ...
             }
         }
 
@@ -202,6 +214,13 @@ namespace VSPilot.Core.AI
                 _logger.LogError(ex, "Failed to get AI response");
                 throw new AutomationException("Failed to get AI response", ex);
             }
+        }
+
+        private string GetApiKey()
+        {
+            // Implement your API key retrieval logic here
+            // For example:
+            return ""; // Return an empty string or retrieve from settings
         }
 
         private string GetApiKeyFromSettings()

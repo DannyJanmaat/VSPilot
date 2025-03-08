@@ -34,6 +34,8 @@ namespace VSPilot.Core.Automation
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+
+
         /// <summary>
         /// Creates a new file with the specified content.
         /// </summary>
@@ -504,7 +506,7 @@ namespace VSPilot.Core.Automation
             try
             {
                 // Try to find the active project first
-                EnvDTE.Project activeProject = null;
+                EnvDTE.Project? activeProject = null;
 
                 if (_dte.ActiveSolutionProjects is Array activeSolutionProjects &&
                     activeSolutionProjects.Length > 0)
@@ -517,7 +519,12 @@ namespace VSPilot.Core.Automation
                     throw new AutomationException("No project found in the solution.");
                 }
 
-                return Path.GetDirectoryName(activeProject.FullName);
+                string? projectPath = Path.GetDirectoryName(activeProject.FullName);
+                if (projectPath == null)
+                {
+                    throw new AutomationException("Failed to get project root path");
+                }
+                return projectPath;
             }
             catch (Exception ex)
             {
