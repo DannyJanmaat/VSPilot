@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.Logging;
 
-namespace VSPilot.UI.Controls
+namespace VSPilot.UI.Windows
 {
     public partial class ChatInput : UserControl
     {
