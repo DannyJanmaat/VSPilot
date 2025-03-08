@@ -1,32 +1,30 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.Extensions.Logging;
-using VSPilot.Common.Models;
-using VSPilot.Common.Exceptions;
-using System.IO;
-using System.Text.Json;
-using System.Net.Http;
-using System.Collections.Generic;
-using Microsoft.VisualStudio.Shell.Interop;
-using EnvDTE;
+﻿using EnvDTE;
 using EnvDTE80;
-using VSPilot.Core.Services;
-using System.IO.Packaging;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
+using VSPilot.Common.Exceptions;
+using VSPilot.Common.Models;
 
 namespace VSPilot.Core.AI
 {
     public class AIRequestHandler
     {
         private readonly VSPilotAIIntegration _aiIntegration;
-        private readonly VSPilotAIIntegration _integration; // Added to match your constructor
+        private readonly VSPilotAIIntegration _integration;
         private readonly ILogger<AIRequestHandler> _logger;
         private readonly LanguageProcessor _languageProcessor;
         private readonly HttpClient _httpClient;
-        private readonly DTE2 _dte; // Added for DTE service
-        private AsyncPackage _package; // Added for AsyncPackage service
-        private readonly ILogger<LanguageProcessor> _languageProcessorLogger; // Added for language processor logger
-        private string _apiKey; // Added for API key
+        private readonly DTE2? _dte;
+        private readonly AsyncPackage? _package;
+        private readonly ILogger<LanguageProcessor>? _languageProcessorLogger;
+        private readonly string _apiKey;
         private const string API_ENDPOINT = "https://api.openai.com/v1/completions";
 
         public AIRequestHandler(ILogger<AIRequestHandler> logger, VSPilotAIIntegration aiIntegration)
@@ -44,8 +42,19 @@ namespace VSPilot.Core.AI
             // Try to get AsyncPackage service, but don't throw if it's not available
             _package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
 
+            // Initialize HttpClient
+            _httpClient = new HttpClient();
+
             // Set up logger
             _languageProcessorLogger = logger as ILogger<LanguageProcessor>;
+
+            // Initialize LanguageProcessor
+            // Create a specific logger for LanguageProcessor
+            ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+            {
+                _ = builder.AddConsole();
+            });
+            _languageProcessor = new LanguageProcessor(loggerFactory.CreateLogger<LanguageProcessor>()); // Assign _languageProcessor here
 
             // Don't throw exceptions for missing services, just log warnings
             if (_dte == null)
@@ -67,7 +76,8 @@ namespace VSPilot.Core.AI
             if (!string.IsNullOrEmpty(_apiKey))
             {
                 // Initialize API client
-                // ...
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
             }
         }
 
@@ -83,13 +93,13 @@ namespace VSPilot.Core.AI
                 _logger.LogInformation("Analyzing request: {Request}", userRequest);
 
                 // Process through language processor
-                var processedRequest = await _languageProcessor.ProcessRequestAsync(userRequest);
+                string processedRequest = await _languageProcessor.ProcessRequestAsync(userRequest);
 
                 // Get context from current solution
-                var solutionContext = await GetSolutionContextAsync();
+                string solutionContext = await GetSolutionContextAsync();
 
                 // Combine processed request with solution context
-                var aiPrompt = CombineRequestWithContext(processedRequest, solutionContext);
+                string aiPrompt = CombineRequestWithContext(processedRequest, solutionContext);
 
                 // Try to get AI suggestions from VSPilotAIIntegration
                 VSPilot.Common.Models.ProjectChanges? changes = null;
@@ -105,12 +115,12 @@ namespace VSPilot.Core.AI
                 // If VSPilotAIIntegration fails, use OpenAI
                 if (changes == null)
                 {
-                    var aiResponse = await GetAIResponseAsync(aiPrompt);
+                    string aiResponse = await GetAIResponseAsync(aiPrompt);
                     changes = await ParseAIResponseAsync(aiResponse);
                 }
 
                 // Validate and enhance changes
-                var projectRequest = CreateProjectChangeRequest(changes);
+                ProjectChangeRequest projectRequest = CreateProjectChangeRequest(changes);
 
                 _logger.LogInformation("Request analysis complete. Files to create: {CreateCount}, Files to modify: {ModifyCount}",
                     projectRequest.FilesToCreate?.Count ?? 0,
@@ -132,7 +142,7 @@ namespace VSPilot.Core.AI
                 try
                 {
                     // Basic implementation of parsing AI response
-                    var changes = new VSPilot.Common.Models.ProjectChanges
+                    ProjectChanges changes = new VSPilot.Common.Models.ProjectChanges
                     {
                         NewFiles = new List<FileCreationInfo>(),
                         ModifiedFiles = new List<FileModificationInfo>(),
@@ -198,14 +208,14 @@ namespace VSPilot.Core.AI
                     max_tokens = 2000
                 };
 
-                var response = await _httpClient.PostAsync(
+                HttpResponseMessage response = await _httpClient.PostAsync(
                     API_ENDPOINT,
                     new StringContent(JsonSerializer.Serialize(request), System.Text.Encoding.UTF8, "application/json")
                 );
 
-                response.EnsureSuccessStatusCode();
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var responseObject = JsonSerializer.Deserialize<dynamic>(responseContent);
+                _ = response.EnsureSuccessStatusCode();
+                string responseContent = await response.Content.ReadAsStringAsync();
+                dynamic responseObject = JsonSerializer.Deserialize<dynamic>(responseContent);
 
                 return responseObject?.choices?[0]?.message?.content?.ToString() ?? throw new AutomationException("Invalid AI response format");
             }
@@ -243,17 +253,17 @@ namespace VSPilot.Core.AI
             // Enhance solution context gathering using VSPilotAIIntegration
             try
             {
-                var solution = ServiceProvider.GlobalProvider.GetService(typeof(SVsSolution)) as IVsSolution;
+                IVsSolution solution = ServiceProvider.GlobalProvider.GetService(typeof(SVsSolution)) as IVsSolution;
                 if (solution != null)
                 {
-                    var contextBuilder = new System.Text.StringBuilder();
-                    contextBuilder.AppendLine($"Solution: {solution.GetSolutionInfo(out _, out _, out _)}");
+                    System.Text.StringBuilder contextBuilder = new System.Text.StringBuilder();
+                    _ = contextBuilder.AppendLine($"Solution: {solution.GetSolutionInfo(out _, out _, out _)}");
 
-                    var solutionProjects = await GetProjectsInSolutionAsync(solution);
-                    foreach (var project in solutionProjects)
+                    List<Project> solutionProjects = await GetProjectsInSolutionAsync(solution);
+                    foreach (Project project in solutionProjects)
                     {
-                        contextBuilder.AppendLine($"Project: {project.Name}");
-                        contextBuilder.AppendLine($"Project Type: {project.Kind}");
+                        _ = contextBuilder.AppendLine($"Project: {project.Name}");
+                        _ = contextBuilder.AppendLine($"Project Type: {project.Kind}");
                     }
 
                     return contextBuilder.ToString();
@@ -270,8 +280,8 @@ namespace VSPilot.Core.AI
         private async Task<List<EnvDTE.Project>> GetProjectsInSolutionAsync(IVsSolution solution)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            var projects = new List<EnvDTE.Project>();
-            var dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE;
+            List<Project> projects = new List<EnvDTE.Project>();
+            DTE dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE;
             if (dte != null)
             {
                 foreach (EnvDTE.Project project in dte.Solution.Projects)
@@ -298,7 +308,7 @@ namespace VSPilot.Core.AI
         {
             // Get file content for context
             string fileContent;
-            using (var reader = new StreamReader(error.FileName))
+            using (StreamReader reader = new StreamReader(error.FileName))
             {
                 fileContent = await reader.ReadToEndAsync();
             }
@@ -318,27 +328,30 @@ Please provide a specific code fix that addresses this error.";
 
         private ProjectChangeRequest CreateProjectChangeRequest(VSPilot.Common.Models.ProjectChanges changes)
         {
-            if (changes == null)
-            {
-                throw new ArgumentNullException(nameof(changes));
-            }
-
-            return new ProjectChangeRequest
-            {
-                FilesToCreate = changes.NewFiles ?? new List<FileCreationInfo>(),
-                FilesToModify = changes.ModifiedFiles ?? new List<FileModificationInfo>(),
-                References = changes.RequiredReferences ?? new List<string>(),
-                RequiresBuild = true,
-                RequiresTests = ShouldRunTests(changes)
-            };
+            return changes == null
+                ? throw new ArgumentNullException(nameof(changes))
+                : new ProjectChangeRequest
+                {
+                    FilesToCreate = changes.NewFiles ?? new List<FileCreationInfo>(),
+                    FilesToModify = changes.ModifiedFiles ?? new List<FileModificationInfo>(),
+                    References = changes.RequiredReferences ?? new List<string>(),
+                    RequiresBuild = true,
+                    RequiresTests = ShouldRunTests(changes)
+                };
         }
 
         private bool ShouldRunTests(VSPilot.Common.Models.ProjectChanges changes)
         {
-            if (changes == null) return false;
+            if (changes == null)
+            {
+                return false;
+            }
 
             // Run tests if modifying existing files
-            if (changes.ModifiedFiles?.Count > 0) return true;
+            if (changes.ModifiedFiles?.Count > 0)
+            {
+                return true;
+            }
 
             // Run tests if creating new test files
             return changes.NewFiles?.Exists(f =>
