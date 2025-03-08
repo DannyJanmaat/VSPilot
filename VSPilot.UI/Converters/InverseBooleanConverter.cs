@@ -8,18 +8,18 @@ namespace VSPilot.UI.Converters
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool boolValue)
+            if (value is bool boolean)
             {
-                return !boolValue;
+                return !boolean;
             }
             return value;
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool boolValue)
+            if (value is bool boolean)
             {
-                return !boolValue;
+                return !boolean;
             }
             return value;
         }

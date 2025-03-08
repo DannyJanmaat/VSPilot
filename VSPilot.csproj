@@ -10,6 +10,8 @@
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <IncludePackagesInVSIX>true</IncludePackagesInVSIX>
     <RuntimeIdentifiers>win</RuntimeIdentifiers>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <NoWarn>IDE0130;CS8618;CS8601;CS8600;CS8602;CS8603;CS8632;IDE0019;IDE0090;IDE0270;VSTHRD104;VSTHRD102;IDE0059;IDE0060;IDE0079;IDE0018;IDE1006;VSTHRD010;VSX1000</NoWarn>
     <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
   </PropertyGroup>
@@ -58,6 +60,7 @@
   <ItemGroup>
     <Compile Include="VSPackage.Designer.cs" />
     <Compile Include="VSPilot.Core\Build\MockTestPlatform.cs" />
+    <Compile Include="VSPilot.UI\Windows\FrameControl.cs" />
     <Compile Include="VSPilotPackage.cs" />
     <Compile Include="VSPilotGuids.cs" />
     <Compile Include="AssemblyInfo.cs" />

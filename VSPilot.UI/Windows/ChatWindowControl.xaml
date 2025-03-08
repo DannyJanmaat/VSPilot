@@ -1,17 +1,16 @@
 <UserControl x:Class="VSPilot.UI.Windows.ChatWindowControl"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:local="clr-namespace:VSPilot.UI.Windows"
-             mc:Ignorable="d" 
-             d:DesignHeight="450" d:DesignWidth="800">
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                xmlns:local="clr-namespace:VSPilot.UI.Converters"
+                mc:Ignorable="d"
+                d:DesignHeight="450" d:DesignWidth="800">
 
     <UserControl.Resources>
         <ResourceDictionary>
             <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-            <!-- Inline converter definitie -->
-            <local:InverseBooleanConverterLocal x:Key="InverseBooleanConverter"/>
+            <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
             <SolidColorBrush x:Key="UserMessageBackground" Color="#E6F0FA"/>
             <SolidColorBrush x:Key="AIMessageBackground" Color="White"/>
         </ResourceDictionary>

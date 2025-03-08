@@ -1,14 +1,16 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
 using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
+using VSPilot.Common.Commands;
+using VSPilot.Common.Extensions;
 using VSPilot.Core.Automation;
 using VSPilot.UI.ViewModels;
 
@@ -36,55 +38,171 @@ namespace VSPilot.UI.Windows
         private TextBlock? _statusMessage;
         private readonly AsyncPackage? _package;
 
-        // Rest van de code...
+        public ChatWindowControl(ILogger<ChatWindowControl>? logger = null, AsyncPackage? package = null)
+        {
+            try
+            {
+                Debug.WriteLine("ChatWindowControl: Constructor starting");
+                _logger = logger;
+                _package = package;
+
+                // Initialize the component
+                InitializeComponent();
+                Debug.WriteLine("ChatWindowControl: InitializeComponent completed");
+
+                // Add a status message overlay immediately
+                AddStatusMessage("VSPilot Chat is initializing...");
+                Debug.WriteLine("ChatWindowControl: Added status message");
+
+                // Handle UI events
+                Loaded += OnControlLoaded;
+                chatInput.KeyDown += OnChatInputKeyDown;
+                clearButton.Click += OnClearButtonClick;
+                Debug.WriteLine("ChatWindowControl: Event handlers registered");
+
+                // Start initialization in the background to avoid deadlocks
+                InitializeInBackground();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error in ChatWindowControl constructor");
+                Debug.WriteLine($"ChatWindowControl constructor error: {ex.Message}\n{ex.StackTrace}");
+
+                // Try to show error in UI
+                try
+                {
+                    AddStatusMessage($"Error initializing chat: {ex.Message}");
+                }
+                catch
+                {
+                    // Last resort if even the status message fails
+                }
+            }
+        }
 
         private void InitializeInBackground()
         {
-            // Use FireAndForget pattern to avoid unhandled exceptions
-            _ = Task.Run(async () =>
+            // Use AsyncPackage's JoinableTaskFactory if available
+            if (_package != null)
             {
-                try
+                // Fixed CS1998: Add the missing method body that was removed
+                var joinableTask = _package.JoinableTaskFactory.RunAsync(async () =>
                 {
-                    // Simulate some work to give UI time to render
-                    await Task.Delay(500);
-
-                    // Switch to UI thread to initialize the control
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                    // Get automation service
-                    AutomationService? automationService = null;
-                    if (_package != null)
-                    {
-                        object? serviceObj = _package.GetService(typeof(AutomationService));
-                        automationService = serviceObj as AutomationService;
-                    }
-
-                    // Initialize the control
-                    Initialize(automationService);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
-
-                    // Update UI on the UI thread
                     try
                     {
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        UpdateStatusMessage($"Error initializing chat: {ex.Message}");
+                        // Switch to background thread
+                        await Task.Yield();
+
+                        // Give UI time to render
+                        await Task.Delay(500);
+
+                        // Switch to UI thread for initialization
+                        await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                        // Get automation service
+                        AutomationService? automationService = null;
+                        if (_package != null)
+                        {
+                            try
+                            {
+                                // Use IServiceProvider explicit cast to avoid type inference problems
+                                var service = ((IServiceProvider)_package).GetService(typeof(AutomationService));
+                                automationService = service as AutomationService;
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"Failed to get AutomationService: {ex.Message}");
+                            }
+                        }
+
+                        // Initialize the control
+                        Initialize(automationService);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Ignore errors in error handling
+                        Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
+
+                        try
+                        {
+                            await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            UpdateStatusMessage($"Error initializing chat: {ex.Message}");
+                        }
+                        catch
+                        {
+                            // Ignore errors in error handling
+                        }
                     }
-                }
-            }, CancellationToken.None)
-            .ContinueWith(t =>
-            {
-                if (t.IsFaulted)
+                });
+
+                // Properly observe results to fix VSTHRD110
+                var continuationTask = joinableTask.Task.ContinueWith(t =>
                 {
-                    Debug.WriteLine($"Unhandled exception in background initialization: {t.Exception}");
-                }
-            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    if (t.IsFaulted && _logger != null)
+                    {
+                        _logger.LogError(t.Exception, "Background initialization failed");
+                    }
+                }, TaskScheduler.Default);
+
+                // Join the task to avoid fire-and-forget
+                joinableTask.JoinAsync().Forget();
+            }
+            else
+            {
+                // Use a safer approach with Task.Run to avoid VSSDK007
+                var backgroundTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Switch to background thread
+                        await Task.Yield();
+
+                        await Task.Delay(500);
+
+                        // Remove ConfigureAwait(true) - it's not supported on MainThreadAwaitable
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+                        Initialize(null);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
+
+                        try
+                        {
+                            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            UpdateStatusMessage($"Error initializing chat: {ex.Message}");
+                        }
+                        catch { }
+                    }
+                });
+
+                // Observe the task result to avoid unhandled exceptions
+                var continuationResult = backgroundTask.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Debug.WriteLine($"Background initialization failed: {t.Exception}");
+                    }
+                }, TaskScheduler.Default);
+            }
+        }
+
+
+        private Task RunBackgroundTaskAsync(Func<Task> taskFunc)
+        {
+            if (_package != null)
+            {
+                return _package.JoinableTaskFactory.RunAsync(taskFunc).Task;
+            }
+            else
+            {
+                // Fix: Replace ThreadHelper.JoinableTaskFactory with Task.Run
+                return Task.Run(async () =>
+                {
+                    // Use ConfigureAwait(false) to avoid returning to the UI thread unnecessarily
+                    await taskFunc().ConfigureAwait(false);
+                });
+            }
         }
 
         private void AddStatusMessage(string message)
@@ -186,33 +304,112 @@ namespace VSPilot.UI.Windows
 
         private void StartInitializationTimeout()
         {
-            _ = Task.Run(async () =>
+            if (_package != null)
             {
-                try
+                var joinableTask = _package.JoinableTaskFactory.RunAsync(async () =>
                 {
-                    // Wait 10 seconds
-                    await Task.Delay(10000);
-
-                    // If we still have the status message, the initialization might be hanging
-                    if (_statusMessage != null)
+                    try
                     {
-                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        UpdateStatusMessage("Initialization is taking longer than expected. You may need to restart Visual Studio.");
-                        Debug.WriteLine("ChatWindowControl: Initialization timeout detected");
+                        // Wait 10 seconds
+                        await Task.Delay(10000);
+
+                        // If we still have the status message, initialization might be hanging
+                        if (_statusMessage != null)
+                        {
+                            await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            UpdateStatusMessage("Initialization is taking longer than expected. You may need to restart Visual Studio.");
+                            Debug.WriteLine("ChatWindowControl: Initialization timeout detected");
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Timeout task error: {ex.Message}");
-                }
-            }, CancellationToken.None)
-            .ContinueWith(t =>
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Timeout task error: {ex.Message}");
+                    }
+                });
+
+                // Join the task to prevent fire-and-forget issues
+                joinableTask.JoinAsync().Forget();
+            }
+            else
             {
-                if (t.IsFaulted)
+                // Fix: Store the Task.Run result in a variable to observe it
+                var timeoutTask = Task.Run(async () =>
                 {
-                    Debug.WriteLine($"Unhandled exception in timeout task: {t.Exception}");
-                }
-            }, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                    try
+                    {
+                        // Wait 10 seconds
+                        await Task.Delay(10000);
+
+                        // If we still have the status message, initialization might be hanging
+                        if (_statusMessage != null)
+                        {
+                            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                            UpdateStatusMessage("Initialization is taking longer than expected. You may need to restart Visual Studio.");
+                            Debug.WriteLine("ChatWindowControl: Initialization timeout detected");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Timeout task error: {ex.Message}");
+                    }
+                });
+
+                // Add this to silence VSTHRD110 warning
+                _ = timeoutTask.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Debug.WriteLine($"Timeout task failed: {t.Exception}");
+                    }
+                }, TaskScheduler.Default);
+            }
+        }
+
+        private void RunBackgroundTask(Func<Task> taskFunc)
+        {
+            if (_package != null)
+            {
+                var joinableTask = _package.JoinableTaskFactory.RunAsync(async () =>
+                {
+                    try
+                    {
+                        await taskFunc();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("RunBackgroundTask: Exception in background task: " + ex);
+                    }
+                });
+
+                // Join it to avoid fire-and-forget issues
+                joinableTask.JoinAsync().Forget();
+            }
+            else
+            {
+                Debug.WriteLine("Warning: AsyncPackage not available, using Task.Run as fallback.");
+                // Fix: Store Task.Run result in a variable to observe it
+                var task = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // ConfigureAwait(false) to avoid deadlocks
+                        await taskFunc().ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("RunBackgroundTask (fallback): Exception in background task: " + ex);
+                    }
+                });
+
+                // Add this to silence VSTHRD110 warning
+                _ = task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted)
+                    {
+                        Debug.WriteLine($"Background task failed: {t.Exception}");
+                    }
+                }, TaskScheduler.Default);
+            }
         }
 
         private void OnChatInputKeyDown(object sender, KeyEventArgs e)
