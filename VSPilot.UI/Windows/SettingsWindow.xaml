@@ -4,15 +4,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:shell="clr-namespace:Microsoft.VisualStudio.Shell;assembly=Microsoft.VisualStudio.Shell.Framework"
-    xmlns:converters="clr-namespace:VSPilot.UI.Converters"
     Title="VSPilot Settings"
     Height="500" 
     Width="650"
     WindowStartupLocation="CenterOwner">
 
     <Window.Resources>
-        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <!-- Inline converter definition -->
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
     </Window.Resources>
 
     <Grid Margin="15">
@@ -102,13 +101,13 @@
                 Width="120"
                 Margin="0,0,10,0"
                 ToolTip="Restore all settings to their default values"
-                IsEnabled="{Binding IsLoading, Converter={StaticResource InverseBooleanConverter}}"/>
+                IsEnabled="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}, ConverterParameter=Invert}"/>
             <Button 
                 Content="Save"
                 Command="{Binding SaveCommand}"
                 Width="120"
                 ToolTip="Save current settings"
-                IsEnabled="{Binding HasUnsavedChanges, Converter={StaticResource InverseBooleanConverter}}"/>
+                IsEnabled="{Binding HasUnsavedChanges}"/>
         </StackPanel>
     </Grid>
 </Window>
