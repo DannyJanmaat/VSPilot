@@ -1,6 +1,4 @@
-﻿// File: VSPilot.UI/Commands/ChatWindowCommand.cs
-
-using Microsoft.VisualStudio.Shell;
+﻿using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Threading;
 using System;
@@ -12,7 +10,7 @@ using VSPilot.UI.Windows;
 namespace VSPilot.UI.Commands
 {
     /// <summary>
-    /// Command handler for opening the VSPilot chat window
+    /// Command handler for opening the VSPilot chat window.
     /// </summary>
     internal sealed class ChatWindowCommand
     {
@@ -29,7 +27,7 @@ namespace VSPilot.UI.Commands
         private ChatWindowCommand(AsyncPackage package)
         {
             _package = package ?? throw new ArgumentNullException(nameof(package));
-            Debug.WriteLine($"ChatWindowCommand: Constructor called for package {package.GetType().FullName}");
+            LogExtended($"ChatWindowCommand: Constructor called for package {_package.GetType().FullName}");
         }
 
         private IServiceProvider ServiceProvider => _package;
@@ -40,127 +38,122 @@ namespace VSPilot.UI.Commands
         /// <param name="package">Owner package, not null.</param>
         public static async Task InitializeAsync(AsyncPackage package)
         {
-            Debug.WriteLine("ChatWindowCommand: InitializeAsync started");
+            LogExtendedStatic("ChatWindowCommand: InitializeAsync started");
             try
             {
-                // Switch to the main thread - the call to AddCommand in the constructor requires the UI thread
+                // Switch to the UI thread as adding the command requires it.
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
-                Debug.WriteLine("ChatWindowCommand: Successfully switched to UI thread");
+                LogExtendedStatic("ChatWindowCommand: Successfully switched to UI thread");
 
-                // Get the OleMenuCommandService directly from the package
+                // Retrieve the OleMenuCommandService from the package.
                 OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
                 if (commandService == null)
                 {
                     throw new InvalidOperationException("Failed to get IMenuCommandService");
                 }
-                if (commandService != null)
-                {
-                    Debug.WriteLine("ChatWindowCommand: Successfully got IMenuCommandService");
+                LogExtendedStatic("ChatWindowCommand: Successfully got IMenuCommandService");
 
-                    // Create the command ID with the GUID from the VSCT file
-                    CommandID menuCommandID = new CommandID(VSPilotGuids.CommandSet, VSPilotIds.ChatWindowCommandId);
-                    Debug.WriteLine($"ChatWindowCommand: Created CommandID with GUID={menuCommandID.Guid} and ID={menuCommandID.ID}");
+                // Create the command ID using the VSCT file's GUID and ID.
+                CommandID menuCommandID = new CommandID(VSPilotGuids.CommandSet, VSPilotIds.ChatWindowCommandId);
+                LogExtendedStatic($"ChatWindowCommand: Created CommandID with GUID={menuCommandID.Guid} and ID={menuCommandID.ID}");
 
-                    // Create the menu item and handler
-                    Instance = new ChatWindowCommand(package);
-                    MenuCommand menuItem = new MenuCommand(Instance.Execute, menuCommandID);
-                    Debug.WriteLine($"ChatWindowCommand: Created MenuCommand with handler 'Execute'");
+                // Create the menu item with the Execute method as handler.
+                Instance = new ChatWindowCommand(package);
+                MenuCommand menuItem = new MenuCommand(Instance.Execute, menuCommandID);
+                LogExtendedStatic("ChatWindowCommand: Created MenuCommand with handler 'Execute'");
 
-                    // Add the command to the service
-                    commandService.AddCommand(menuItem);
-                    Debug.WriteLine($"ChatWindowCommand: Successfully added command to service");
-                    Debug.WriteLine("ChatWindowCommand: Instance created successfully");
-                }
-                else
-                {
-                    Debug.WriteLine("ChatWindowCommand: Failed to get IMenuCommandService!");
-                }
+                // Add the command to the service.
+                commandService.AddCommand(menuItem);
+                LogExtendedStatic("ChatWindowCommand: Successfully added command to service");
+                LogExtendedStatic("ChatWindowCommand: Instance created successfully");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ChatWindowCommand: Exception in InitializeAsync: {ex.Message}");
-                Debug.WriteLine($"ChatWindowCommand: Stack trace: {ex.StackTrace}");
+                LogExtendedStatic($"ChatWindowCommand: Exception in InitializeAsync: {ex.Message}");
+                LogExtendedStatic($"ChatWindowCommand: Stack trace: {ex.StackTrace}");
             }
-            Debug.WriteLine("ChatWindowCommand: InitializeAsync completed");
+            LogExtendedStatic("ChatWindowCommand: InitializeAsync completed");
         }
 
         /// <summary>
-        /// This function is the callback used to execute the command when the menu item is clicked.
+        /// Callback for executing the command when the menu item is clicked.
         /// </summary>
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            Debug.WriteLine("ChatWindowCommand: Execute method called");
+            LogExtended("ChatWindowCommand: Execute method called");
 
             try
             {
-                Debug.WriteLine("ChatWindowCommand: Starting async window creation");
+                LogExtended("ChatWindowCommand: Starting async window creation");
 
-                // Use the package's JoinableTaskFactory for thread safety and proper async
-                var task = _package.JoinableTaskFactory.RunAsync(async () =>
+                // Use the package's JoinableTaskFactory for thread safety.
+                var joinableTask = _package.JoinableTaskFactory.RunAsync(async () =>
                 {
                     try
                     {
-                        // First yield control to ensure non-blocking behavior
+                        LogExtended("ChatWindowCommand: Yielding to avoid blocking");
                         await Task.Yield();
-                        Debug.WriteLine("ChatWindowCommand: After Task.Yield()");
+                        LogExtended("ChatWindowCommand: After Task.Yield()");
 
-                        // Break up long operations into smaller chunks to prevent UI freezing
+                        // Break long operations into small delays to allow message pumping.
                         for (int i = 0; i < 5; i++)
                         {
                             await Task.Delay(10);
-                            Debug.WriteLine($"ChatWindowCommand: Small delay {i} complete");
+                            LogExtended($"ChatWindowCommand: Small delay {i} complete");
                         }
 
-                        // Switch back to UI thread safely
+                        // Switch back to UI thread.
                         await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
-                        Debug.WriteLine("ChatWindowCommand: Switched to UI thread for window creation");
+                        LogExtended("ChatWindowCommand: Switched to UI thread for window creation");
 
-                        // Now create the window
+                        // Create or find the tool window.
                         ToolWindowPane window = _package.FindToolWindow(typeof(ChatWindow), 0, true);
-                        Debug.WriteLine("ChatWindowCommand: Found/created tool window");
+                        LogExtended("ChatWindowCommand: Found/created tool window");
 
-                        if ((null == window) || (null == window.Frame))
+                        if (window == null || window.Frame == null)
                         {
-                            Debug.WriteLine("ChatWindowCommand: Window or frame is null");
+                            LogExtended("ChatWindowCommand: Window or frame is null");
                             throw new NotSupportedException("Cannot create tool window");
                         }
 
                         IVsWindowFrame frame = (IVsWindowFrame)window.Frame;
-                        Debug.WriteLine("ChatWindowCommand: Got window frame, showing window");
+                        LogExtended("ChatWindowCommand: Got window frame, now showing window");
 
-                        // Show the window, but handle any error
+                        // Attempt to show the window.
                         int hr = frame.Show();
                         if (Microsoft.VisualStudio.ErrorHandler.Failed(hr))
                         {
-                            Debug.WriteLine($"ChatWindowCommand: Failed to show window, hr=0x{hr:X}");
+                            LogExtended($"ChatWindowCommand: Failed to show window, hr=0x{hr:X}");
                             throw new InvalidOperationException($"Failed to show window, hr=0x{hr:X}");
                         }
 
-                        Debug.WriteLine("ChatWindowCommand: Window shown successfully");
+                        LogExtended("ChatWindowCommand: Window shown successfully");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"ChatWindowCommand: Async exception: {ex.Message}");
+                        LogExtended($"ChatWindowCommand: Async exception: {ex.Message}");
                         await ShowErrorMessageAsync("Error opening chat window", ex);
                     }
                 });
 
-                // Use Task.Forget() extension method from Microsoft.VisualStudio.Threading
-                task.Task.Forget();
-
-                Debug.WriteLine("ChatWindowCommand: Execute completed - window creation proceeding asynchronously");
+                // Observe the underlying Task by calling Forget() on the Task property.
+                joinableTask.Task.Forget();
+                LogExtended("ChatWindowCommand: Execute completed - window creation proceeding asynchronously");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"ChatWindowCommand: Exception in Execute: {ex.Message}");
-                Debug.WriteLine($"ChatWindowCommand: Stack trace: {ex.StackTrace}");
+                LogExtended($"ChatWindowCommand: Exception in Execute: {ex.Message}");
+                LogExtended($"ChatWindowCommand: Stack trace: {ex.StackTrace}");
             }
         }
 
+        /// <summary>
+        /// Displays an error message using a message box.
+        /// </summary>
         private async Task ShowErrorMessageAsync(string message, Exception ex)
         {
-            Debug.WriteLine($"ChatWindowCommand: ShowErrorMessageAsync - Showing error message box: {message}, Exception: {ex.Message}");
+            LogExtended($"ChatWindowCommand: ShowErrorMessageAsync - About to display error: {message}, Exception: {ex.Message}");
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -168,7 +161,7 @@ namespace VSPilot.UI.Commands
                 if (uiShell != null)
                 {
                     Guid clsid = Guid.Empty;
-                    _ = uiShell.ShowMessageBox(
+                    int result = uiShell.ShowMessageBox(
                         0,
                         ref clsid,
                         "VSPilot Error",
@@ -179,20 +172,34 @@ namespace VSPilot.UI.Commands
                         OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST,
                         OLEMSGICON.OLEMSGICON_CRITICAL,
                         0,
-                        out int result
+                        out int _
                     );
-                    Debug.WriteLine("ChatWindowCommand: ShowErrorMessageAsync - MessageBox displayed");
+                    LogExtended($"ChatWindowCommand: ShowErrorMessageAsync - MessageBox displayed with result: 0x{result:X}");
                 }
                 else
                 {
-                    Debug.WriteLine("ChatWindowCommand: ShowErrorMessageAsync - Failed to get IVsUIShell service!");
+                    LogExtended("ChatWindowCommand: ShowErrorMessageAsync - Failed to retrieve IVsUIShell service");
                 }
             }
             catch (Exception msgEx)
             {
-                Debug.WriteLine($"ChatWindowCommand: Error in ShowErrorMessageAsync: {msgEx.Message}");
+                LogExtended($"ChatWindowCommand: Error in ShowErrorMessageAsync: {msgEx.Message}");
             }
-            Debug.WriteLine("ChatWindowCommand: ShowErrorMessageAsync - Finished");
+            LogExtended("ChatWindowCommand: ShowErrorMessageAsync - Finished");
+        }
+
+        // Extended logging helper that writes to both Debug and Console.
+        private void LogExtended(string message)
+        {
+            Debug.WriteLine(message);
+            Console.WriteLine(message);
+        }
+
+        // Static version for use in static methods.
+        private static void LogExtendedStatic(string message)
+        {
+            Debug.WriteLine(message);
+            Console.WriteLine(message);
         }
     }
 }

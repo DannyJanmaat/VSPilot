@@ -6,6 +6,7 @@ using VSPilot.Common.Commands;
 using VSPilot.Common.ViewModels;
 using VSPilot.Core.Services;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace VSPilot.UI.ViewModels
 {
@@ -23,12 +24,13 @@ namespace VSPilot.UI.ViewModels
             get => _settings;
             private set
             {
+                LogExtended("SettingsViewModel: Setting new Settings value");
                 if (SetProperty(ref _settings, value))
                 {
-                    // Only mark as unsaved if not during initial loading
                     if (!_isLoading)
                     {
                         HasUnsavedChanges = true;
+                        LogExtended("SettingsViewModel: Marked as unsaved due to change in Settings");
                     }
                 }
             }
@@ -37,13 +39,21 @@ namespace VSPilot.UI.ViewModels
         public bool HasUnsavedChanges
         {
             get => _hasUnsavedChanges;
-            private set => SetProperty(ref _hasUnsavedChanges, value);
+            private set
+            {
+                LogExtended($"SettingsViewModel: HasUnsavedChanges set to {value}");
+                SetProperty(ref _hasUnsavedChanges, value);
+            }
         }
 
         public bool IsLoading
         {
             get => _isLoading;
-            private set => SetProperty(ref _isLoading, value);
+            private set
+            {
+                LogExtended($"SettingsViewModel: IsLoading set to {value}");
+                SetProperty(ref _isLoading, value);
+            }
         }
 
         public ICommand SaveCommand { get; }
@@ -58,86 +68,104 @@ namespace VSPilot.UI.ViewModels
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            // Initialize settings with default values
+            LogExtended("SettingsViewModel: Initializing default settings");
             _settings = new VSPilotSettings();
 
-            // Create commands
+            LogExtended("SettingsViewModel: Creating commands");
             SaveCommand = new RelayCommand(async () => await SaveSettingsAsync(), CanSaveSettings);
             ResetCommand = new RelayCommand(async () => await ResetSettingsAsync(), CanResetSettings);
 
-            // Load initial settings asynchronously
+            LogExtended("SettingsViewModel: Starting asynchronous settings initialization");
             _ = InitializeSettingsAsync();
         }
 
-        private bool CanSaveSettings() =>
-            HasUnsavedChanges && !IsLoading;
-
-        private bool CanResetSettings() =>
-            !IsLoading;
+        private bool CanSaveSettings() => HasUnsavedChanges && !IsLoading;
+        private bool CanResetSettings() => !IsLoading;
 
         private async Task InitializeSettingsAsync()
         {
+            LogExtended("SettingsViewModel: InitializeSettingsAsync started");
             try
             {
                 IsLoading = true;
-                _settings = await _configService.LoadSettingsAsync();
+                _logger.LogInformation("Loading settings asynchronously.");
+                var loadedSettings = await _configService.LoadSettingsAsync();
+                LogExtended("SettingsViewModel: Settings loaded from configuration service");
+                Settings = loadedSettings;
                 HasUnsavedChanges = false;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load initial settings");
+                LogExtended($"SettingsViewModel: Exception while loading settings: {ex.Message}");
                 OnError($"Failed to load settings: {ex.Message}");
-
-                // Fallback to default settings
-                _settings = new VSPilotSettings();
+                Settings = new VSPilotSettings();
             }
             finally
             {
                 IsLoading = false;
+                LogExtended("SettingsViewModel: InitializeSettingsAsync completed");
             }
         }
 
         private async Task SaveSettingsAsync()
         {
+            LogExtended("SettingsViewModel: SaveSettingsAsync started");
             try
             {
+                _logger.LogInformation("Saving settings.");
                 await _configService.SaveSettingsAsync(Settings);
                 HasUnsavedChanges = false;
                 _logger.LogInformation("Settings saved successfully");
+                LogExtended("SettingsViewModel: Settings saved successfully");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save settings");
+                LogExtended($"SettingsViewModel: Exception while saving settings: {ex.Message}");
                 OnError($"Failed to save settings: {ex.Message}");
+            }
+            finally
+            {
+                LogExtended("SettingsViewModel: SaveSettingsAsync completed");
             }
         }
 
         private async Task ResetSettingsAsync()
         {
+            LogExtended("SettingsViewModel: ResetSettingsAsync started");
             try
             {
-                // Create a fresh instance of default settings
+                LogExtended("SettingsViewModel: Creating default settings instance");
                 Settings = new VSPilotSettings();
-
-                // Save the reset settings
                 await SaveSettingsAsync();
-
                 _logger.LogInformation("Settings reset to defaults");
+                LogExtended("SettingsViewModel: Settings reset to defaults");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to reset settings");
+                LogExtended($"SettingsViewModel: Exception while resetting settings: {ex.Message}");
                 OnError($"Failed to reset settings: {ex.Message}");
+            }
+            finally
+            {
+                LogExtended("SettingsViewModel: ResetSettingsAsync completed");
             }
         }
 
         private void OnError(string message)
         {
-            // Log the error
             _logger.LogWarning(message);
-
-            // Raise the error event
+            LogExtended($"SettingsViewModel: OnError raised with message: {message}");
             ErrorOccurred?.Invoke(this, message);
+        }
+
+        // Extended logging helper that writes to both Debug output and Console.
+        private void LogExtended(string message)
+        {
+            Debug.WriteLine(message);
+            Console.WriteLine(message);
         }
     }
 }

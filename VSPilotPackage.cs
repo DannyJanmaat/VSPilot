@@ -1,7 +1,9 @@
-﻿#nullable enable
+﻿// VSPilotPackage.cs
+#nullable enable
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
@@ -21,6 +23,9 @@ using System.Diagnostics.Metrics;
 using System.ComponentModel.Design;
 using Moq;
 using static VSPilot.Core.Build.TestRunner;
+// Import the console helper for debugging output
+using VSPilot.Common.Utilities;
+using ServiceProvider = Microsoft.Extensions.DependencyInjection.ServiceProvider; // Add this alias
 
 namespace VSPilot
 {
@@ -34,8 +39,11 @@ namespace VSPilot
                        Transient = false)]
     public sealed class VSPilotPackage : AsyncPackage
     {
+        // Expose a static instance for use by tool windows.
+        public static VSPilotPackage Instance { get; private set; } = null!;
+
         // Core package components
-        private Microsoft.VisualStudio.Shell.ServiceProvider? _serviceProvider;
+        private ServiceProvider? _serviceProvider;
         private readonly ILogger<VSPilotPackage>? _logger;
         private Stopwatch? _initializationTimer;
         private readonly ServiceCollection _services;
@@ -46,159 +54,174 @@ namespace VSPilot
         private static readonly ActivitySource _activitySource = new ActivitySource("VSPilot.Package");
 
         /// <summary>
-        /// Package constructor
+        /// Package constructor – allocate the console as early as possible.
         /// </summary>
         public VSPilotPackage()
         {
-            Debug.WriteLine("VSPilotPackage: Constructor called");
+            ConsoleHelper.EnsureConsole();
+            LogExtended("VSPilotPackage: Constructor called");
             _services = new ServiceCollection();
-
             var serviceProvider = _services.BuildServiceProvider();
             _logger = serviceProvider.GetService<ILogger<VSPilotPackage>>();
+            LogExtended("VSPilotPackage: Logger initialized in constructor");
         }
 
         /// <summary>
-        /// Async package initialization
+        /// Async package initialization.
         /// </summary>
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
-            Debug.WriteLine($"VSPilotPackage: InitializeAsync started at {DateTime.Now}");
-            Debug.WriteLine($"Cancellation token can be canceled: {cancellationToken.CanBeCanceled}");
+            LogExtended($"VSPilotPackage: InitializeAsync started at {DateTime.Now}");
+            LogExtended($"VSPilotPackage: Cancellation token can be canceled: {cancellationToken.CanBeCanceled}");
 
             using var activity = _activitySource.StartActivity("PackageInitialization");
 
             try
             {
-                // Start initialization timer
                 _initializationTimer = Stopwatch.StartNew();
+                LogExtended("VSPilotPackage: Initialization timer started");
 
-                // Base initialization
                 await base.InitializeAsync(cancellationToken, progress);
+                LogExtended("VSPilotPackage: Base InitializeAsync completed");
 
-                // Create a cancellation token with a reasonable timeout
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // Increased timeout
-                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    cancellationToken,
-                    timeoutCts.Token
-                );
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+                LogExtended("VSPilotPackage: Linked cancellation token created");
 
-                // Switch to main thread
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(linkedCts.Token);
-                Debug.WriteLine("VSPilotPackage: Switched to main thread");
+                LogExtended("VSPilotPackage: Successfully switched to main thread");
 
-                // Initialize core services
                 await InitializeCoreServicesAsync(linkedCts.Token);
+                LogExtended("VSPilotPackage: Core services initialization finished");
 
-                // Complete initialization
                 _initializationTimer.Stop();
-                Debug.WriteLine($"VSPilotPackage: Initialization complete in {_initializationTimer.ElapsedMilliseconds}ms");
+                LogExtended($"VSPilotPackage: Initialization complete in {_initializationTimer.ElapsedMilliseconds}ms");
 
-                // Log performance metrics
+                // Assign the static instance for later use.
+                Instance = this;
+
                 activity?.SetTag("InitializationTime", _initializationTimer.ElapsedMilliseconds);
                 activity?.SetStatus(ActivityStatusCode.Ok, "Package initialization successful");
             }
             catch (OperationCanceledException ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Initialization timed out or canceled: {ex.Message}");
+                LogExtended($"VSPilotPackage: Initialization timed out or canceled: {ex.Message}");
                 _logger?.LogWarning("VSPilot package initialization timed out");
-
                 activity?.SetStatus(ActivityStatusCode.Error, "Initialization timed out");
                 await HandleInitializationCancellationAsync(ex);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Initialization FAILED - {ex.GetType().Name}");
-                Debug.WriteLine($"Error Message: {ex.Message}");
-                Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
-
+                LogExtended($"VSPilotPackage: Initialization FAILED - {ex.GetType().Name}");
+                LogExtended($"VSPilotPackage: Error Message: {ex.Message}");
+                LogExtended($"VSPilotPackage: Stack Trace: {ex.StackTrace}");
                 _logger?.LogError(ex, "Initialization failed");
                 activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-
                 try
                 {
                     await HandleInitializationErrorAsync(ex);
                 }
                 catch (Exception handlerEx)
                 {
-                    Debug.WriteLine($"Error in error handler: {handlerEx.Message}");
+                    LogExtended($"VSPilotPackage: Error in error handler: {handlerEx.Message}");
                 }
-
                 throw;
             }
             finally
             {
                 _isInitialized = true;
-                Debug.WriteLine("VSPilotPackage: Set _isInitialized to true");
+                LogExtended("VSPilotPackage: Set _isInitialized to true");
                 activity?.Dispose();
             }
-
-            Debug.WriteLine("VSPilotPackage: InitializeAsync method completed");
+            LogExtended("VSPilotPackage: InitializeAsync method completed");
         }
 
         /// <summary>
-        /// Initializes core services for the package
+        /// Initializes core services for the package.
+        /// Updated to supply a fallback for ConfigurationService if unavailable.
         /// </summary>
         private async Task InitializeCoreServicesAsync(CancellationToken cancellationToken)
         {
-            Debug.WriteLine("VSPilotPackage: Starting core services initialization");
+            LogExtended("VSPilotPackage: Starting core services initialization");
 
             try
             {
-                // Parallel service retrieval
+                LogExtended("VSPilotPackage: Retrieving critical services in parallel");
                 var dteTask = GetCriticalServiceAsync<DTE2>(typeof(SDTE), "DTE");
                 var solutionTask = GetCriticalServiceAsync<IVsSolution>(typeof(SVsSolution), "Solution");
                 var outputWindowTask = GetCriticalServiceAsync<IVsOutputWindow>(typeof(SVsOutputWindow), "OutputWindow");
 
-                // Wait for critical services
                 await Task.WhenAll(dteTask, solutionTask, outputWindowTask);
+                LogExtended("VSPilotPackage: All critical services retrieved successfully");
 
-                // Retrieve service results
                 var dte = await dteTask;
                 var solution = await solutionTask;
                 var outputWindow = await outputWindowTask;
 
-                // Configure logging services first
+                LogExtended("VSPilotPackage: Configuring logging services");
                 _services.AddLogging(builder =>
                 {
                     builder.AddConsole();
                     builder.SetMinimumLevel(LogLevel.Warning);
                     builder.AddFilter("VSPilot", LogLevel.Warning);
                 });
+                LogExtended("VSPilotPackage: Logging services configured");
 
-                // Configure basic services
+                // For ConfigurationService, try to retrieve it. If unavailable, use a default implementation.
+                ConfigurationService? configurationService;
+                try
+                {
+                    configurationService = (await GetServiceAsync(typeof(ConfigurationService))) as ConfigurationService;
+                    if (configurationService == null)
+                    {
+                        throw new Exception("ConfigurationService is null.");
+                    }
+                }
+                catch (Exception)
+                {
+                    LogExtended("ConfigurationService service is unavailable. Using default configuration service.");
+                    configurationService = new DefaultConfigurationService();
+                }
+                _services.AddSingleton(configurationService);
+
+                // Register other basic services.
                 _services.AddSingleton<AsyncPackage>(this);
-                _services.AddSingleton<ConfigurationService>();
                 _services.AddSingleton<TemplateManager>();
                 _services.AddSingleton<VSPilot.Core.Services.TaskScheduler>();
                 _services.AddSingleton<SolutionAnalyzer>();
                 _services.AddSingleton<LanguageProcessor>();
 
-                // Add critical services
                 if (dte != null)
+                {
                     _services.AddSingleton(dte);
-
+                    LogExtended("VSPilotPackage: DTE service added to service collection");
+                }
                 if (solution != null)
+                {
                     _services.AddSingleton(solution);
+                    LogExtended("VSPilotPackage: Solution service added to service collection");
+                }
 
-                // Configure output window
                 if (outputWindow != null)
                 {
+                    LogExtended("VSPilotPackage: Creating output window pane");
                     IVsOutputWindowPane outputPane = await CreateOutputWindowPaneAsync(outputWindow);
                     _services.AddSingleton(outputPane);
                     _services.AddSingleton<LoggingService>(sp =>
-                        new LoggingService(outputPane, true)); // Enable detailed logging
+                            new LoggingService(outputPane, true));
+                    LogExtended("VSPilotPackage: Output window pane configured and logging service added");
                 }
 
-                // Register file manager before other services that depend on it
                 _services.AddSingleton<FileManager>();
+                LogExtended("VSPilotPackage: FileManager added to service collection");
 
-                // Register service interfaces to implementations
                 _services.AddSingleton<IVsSolutionContext>(sp =>
                 {
-                    var dte = sp.GetRequiredService<DTE2>();
+                    var dteService = sp.GetRequiredService<DTE2>();
                     var fileManager = sp.GetRequiredService<FileManager>();
-                    return new VsSolutionAdapter(dte, fileManager);
+                    return new VsSolutionAdapter(dteService, fileManager);
                 });
+                LogExtended("VSPilotPackage: IVsSolutionContext registered");
 
                 _services.AddSingleton<ITestPlatform, MockTestPlatform>();
                 _services.AddSingleton<IProjectManager, ProjectManager>();
@@ -206,171 +229,153 @@ namespace VSPilot
                 _services.AddSingleton<IErrorHandler, ErrorHandler>();
                 _services.AddSingleton<TestRunner>();
 
-                // AI components
                 _services.AddSingleton<AIRequestHandler>();
                 _services.AddSingleton<VSPilotAIIntegration>();
+                LogExtended("VSPilotPackage: AI components registered");
 
-                // Register AutomationService last since it depends on many other services
                 _services.AddSingleton<AutomationService>();
+                LogExtended("VSPilotPackage: AutomationService registered");
 
-                // Build service provider
                 try
                 {
-                    _serviceProvider = new Microsoft.VisualStudio.Shell.ServiceProvider((Microsoft.VisualStudio.OLE.Interop.IServiceProvider)this);
+                    _serviceProvider = _services.BuildServiceProvider();
+                    LogExtended("VSPilotPackage: Built custom service provider from service collection");
 
-                    // Create a new ServiceProvider for our services
-                    var provider = _services.BuildServiceProvider();
-
-                    // Important: Add the AutomationService to the VSPackage services
-                    var automationService = provider.GetService<AutomationService>();
+                    var automationService = _serviceProvider.GetService<AutomationService>();
                     if (automationService != null)
                     {
-                        Debug.WriteLine("VSPilotPackage: Adding AutomationService to ServiceContainer");
+                        LogExtended("VSPilotPackage: Adding AutomationService to ServiceContainer");
                         ((IServiceContainer)this).AddService(typeof(AutomationService), automationService, true);
                     }
                     else
                     {
-                        Debug.WriteLine("VSPilotPackage: Failed to get AutomationService from service provider");
+                        LogExtended("VSPilotPackage: Failed to get AutomationService from provider");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Service provider build failed: {ex.Message}");
+                    LogExtended($"VSPilotPackage: Service provider build failed: {ex.Message}");
                     throw;
                 }
 
-                // Initialize commands and UI
                 await InitializeCommandsAsync(cancellationToken);
+                LogExtended("VSPilotPackage: Commands initialized");
 
-                // Initialize background services after UI is ready
-                await InitializeBackgroundServicesAsync(cancellationToken);
+                // Run background services asynchronously.
+                _ = JoinableTaskFactory.RunAsync(async () =>
+                {
+                    await InitializeBackgroundServicesAsync(cancellationToken);
+                });
 
-                Debug.WriteLine("VSPilotPackage: Core services initialization completed");
+                LogExtended("VSPilotPackage: Core services initialization completed");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Core services initialization failed - {ex.Message}");
+                LogExtended($"VSPilotPackage: Core services initialization failed - {ex.Message}");
                 throw;
             }
         }
 
         /// <summary>
-        /// Retrieves a critical Visual Studio service
+        /// Retrieves a critical Visual Studio service.
         /// </summary>
         private async Task<T?> GetCriticalServiceAsync<T>(Type serviceType, string serviceName)
             where T : class
         {
             try
             {
-                Debug.WriteLine($"VSPilotPackage: Getting critical service: {serviceName}");
-
+                LogExtended($"VSPilotPackage: Getting critical service: {serviceName}");
                 var service = await GetServiceAsync(serviceType) as T;
-
                 if (service == null)
                 {
-                    Debug.WriteLine($"VSPilotPackage: Failed to retrieve service: {serviceName}");
+                    LogExtended($"VSPilotPackage: Failed to retrieve service: {serviceName}");
                     throw new InvalidOperationException($"Failed to initialize {serviceName} service");
                 }
-
-                Debug.WriteLine($"VSPilotPackage: Successfully retrieved service: {serviceName}");
+                LogExtended($"VSPilotPackage: Successfully retrieved service: {serviceName}");
                 return service;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Failed to get {serviceName} service - {ex.Message}");
+                LogExtended($"VSPilotPackage: Failed to get {serviceName} service - {ex.Message}");
                 throw new InvalidOperationException($"Critical service {serviceName} initialization failed", ex);
             }
         }
 
         /// <summary>
-        /// Creates an output window pane for VSPilot
+        /// Creates an output window pane for VSPilot.
         /// </summary>
         private async Task<IVsOutputWindowPane> CreateOutputWindowPaneAsync(IVsOutputWindow outputWindow)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
             Guid paneGuid = Guid.NewGuid();
             int hr = outputWindow.CreatePane(ref paneGuid, "VSPilot", 1, 1);
+            LogExtended($"VSPilotPackage: Created output pane with GUID {paneGuid}");
             Marshal.ThrowExceptionForHR(hr);
-
             hr = outputWindow.GetPane(ref paneGuid, out IVsOutputWindowPane pane);
             Marshal.ThrowExceptionForHR(hr);
-
             pane.OutputString("VSPilot output pane initialized" + Environment.NewLine);
-
+            LogExtended("VSPilotPackage: Output pane successfully retrieved and initialized");
             return pane;
         }
 
         /// <summary>
-        /// Initializes package commands
+        /// Initializes package commands.
         /// </summary>
         private async Task InitializeCommandsAsync(CancellationToken cancellationToken)
         {
             try
             {
-                Debug.WriteLine("VSPilotPackage: Initializing Commands");
-
+                LogExtended("VSPilotPackage: Initializing Commands");
                 await Task.WhenAll(
                     ChatWindowCommand.InitializeAsync(this),
                     SettingsCommand.InitializeAsync(this)
                 );
-
-                Debug.WriteLine("VSPilotPackage: Commands initialized");
+                LogExtended("VSPilotPackage: Commands successfully initialized");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Command initialization failed - {ex}");
+                LogExtended($"VSPilotPackage: Command initialization failed - {ex}");
                 _logger?.LogError(ex, "Failed to initialize commands");
                 throw;
             }
         }
 
         /// <summary>
-        /// Initializes background services
+        /// Initializes background services.
         /// </summary>
         private async Task InitializeBackgroundServicesAsync(CancellationToken cancellationToken)
         {
             try
             {
-                Debug.WriteLine("VSPilotPackage: Starting background services");
-
-                await Task.Run(async () =>
+                LogExtended("VSPilotPackage: Starting background services");
+                await Task.Delay(1000, cancellationToken);
+                var aiIntegration = _services.BuildServiceProvider().GetService<VSPilotAIIntegration>();
+                if (aiIntegration != null)
                 {
-                    try
-                    {
-                        await Task.Delay(1000, cancellationToken); // Wait a bit longer
-                        var aiIntegration = _services.BuildServiceProvider().GetService<VSPilotAIIntegration>();
-                        if (aiIntegration != null)
-                        {
-                            aiIntegration.QueueVSPilotProjectAnalysis("DefaultProject");
-                            Debug.WriteLine("VSPilotPackage: Project analysis queued");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"VSPilotPackage: Project analysis failed - {ex}");
-                        _logger?.LogError(ex, "Project analysis failed");
-                    }
-                }, cancellationToken);
+                    aiIntegration.QueueVSPilotProjectAnalysis("DefaultProject");
+                    LogExtended("VSPilotPackage: Project analysis queued for DefaultProject");
+                }
+                else
+                {
+                    LogExtended("VSPilotPackage: Failed to retrieve VSPilotAIIntegration for background services");
+                }
+                LogExtended("VSPilotPackage: Background services task completed");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"VSPilotPackage: Background services initialization failed - {ex}");
+                LogExtended($"VSPilotPackage: Background services initialization failed - {ex}");
                 _logger?.LogError(ex, "Background services initialization failed");
             }
         }
 
-        /// <summary>
-        /// Handles initialization cancellation
-        /// </summary>
         private async Task HandleInitializationCancellationAsync(OperationCanceledException ex)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
             var uiShell = await GetServiceAsync(typeof(SVsUIShell)) as IVsUIShell;
             if (uiShell != null)
             {
                 Guid clsid = Guid.Empty;
+                LogExtended("VSPilotPackage: Showing cancellation message box");
                 uiShell.ShowMessageBox(
                     0,
                     ref clsid,
@@ -385,24 +390,22 @@ namespace VSPilot
                     out int _
                 );
             }
+            else
+            {
+                LogExtended("VSPilotPackage: UI Shell service not available for cancellation message box");
+            }
         }
 
-        /// <summary>
-        /// Handles initialization errors
-        /// </summary>
         private async Task HandleInitializationErrorAsync(Exception ex)
         {
             try
             {
-                Debug.WriteLine($"VSPilotPackage: Starting error handling for {ex.GetType().Name}");
-
+                LogExtended($"VSPilotPackage: Starting error handling for {ex.GetType().Name}");
                 await JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                // Log to Activity Log
                 var activityLog = await GetServiceAsync(typeof(SVsActivityLog)) as IVsActivityLog;
                 if (activityLog != null)
                 {
-                    Debug.WriteLine("VSPilotPackage: Logging to Activity Log");
+                    LogExtended("VSPilotPackage: Logging error to Activity Log");
                     var hResult = activityLog.LogEntry(
                         (uint)__ACTIVITYLOG_ENTRYTYPE.ALE_ERROR,
                         ToString(),
@@ -411,15 +414,12 @@ namespace VSPilot
                 }
                 else
                 {
-                    Debug.WriteLine("VSPilotPackage: Could not get Activity Log service");
+                    LogExtended("VSPilotPackage: Activity Log service not available");
                 }
-
-                // Show error message box
                 var uiShell = await GetServiceAsync(typeof(SVsUIShell)) as IVsUIShell;
                 if (uiShell != null)
                 {
-                    Debug.WriteLine("VSPilotPackage: Preparing to show error message");
-
+                    LogExtended("VSPilotPackage: Preparing to show initialization error message box");
                     Guid clsid = Guid.Empty;
                     int result = uiShell.ShowMessageBox(
                         0,
@@ -434,91 +434,93 @@ namespace VSPilot
                         0,
                         out int _
                     );
-
-                    Debug.WriteLine($"Error message box shown. Result: {result}");
+                    LogExtended($"VSPilotPackage: Error message box shown. Result: {result}");
                 }
                 else
                 {
-                    Debug.WriteLine("VSPilotPackage: Could not get UI Shell service");
+                    LogExtended("VSPilotPackage: UI Shell service not available to show error message");
                 }
             }
             catch (Exception handlerEx)
             {
-                // Fallback error logging
-                Debug.WriteLine($"Critical error in error handler: {handlerEx.Message}");
-                Debug.WriteLine($"Original exception: {ex.Message}");
+                LogExtended($"VSPilotPackage: Critical error in error handler: {handlerEx.Message}");
+                LogExtended($"VSPilotPackage: Original exception: {ex.Message}");
             }
         }
 
-        /// <summary>
-        /// Overrides the base GetService method to use our service provider for AutomationService
-        /// </summary>
         protected override object GetService(Type serviceType)
         {
-            Debug.WriteLine($"VSPilotPackage: GetService called for {serviceType.Name}");
-
-            // Handle AutomationService specially
+            LogExtended($"VSPilotPackage: GetService called for {serviceType.Name}");
             if (serviceType == typeof(AutomationService))
             {
                 var baseService = base.GetService(serviceType);
                 if (baseService != null)
                 {
-                    Debug.WriteLine("VSPilotPackage: Got AutomationService from base");
+                    LogExtended("VSPilotPackage: Got AutomationService from base");
                     return baseService;
                 }
             }
-
             return base.GetService(serviceType);
         }
 
         #region Tool Window Support
-        /// <summary>
-        /// Gets the async tool window factory for the specified tool window type
-        /// </summary>
         public override IVsAsyncToolWindowFactory GetAsyncToolWindowFactory(Guid toolWindowType)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            Debug.WriteLine($"VSPilotPackage: GetAsyncToolWindowFactory called for {toolWindowType}");
-
+            LogExtended($"VSPilotPackage: GetAsyncToolWindowFactory called for {toolWindowType}");
             return toolWindowType == typeof(ChatWindow).GUID ? this : base.GetAsyncToolWindowFactory(toolWindowType);
         }
 
-        /// <summary>
-        /// Gets the tool window title for the specified tool window type
-        /// </summary>
         protected override string GetToolWindowTitle(Type toolWindowType, int id)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             return toolWindowType == typeof(ChatWindow) ? "VSPilot Chat" : base.GetToolWindowTitle(toolWindowType, id);
         }
 
-        /// <summary>
-        /// Initializes the tool window asynchronously
-        /// </summary>
         protected override async Task<object> InitializeToolWindowAsync(Type toolWindowType, int id, CancellationToken cancellationToken)
         {
-            Debug.WriteLine($"InitializeToolWindowAsync called for {toolWindowType.Name}");
-
-            // Make sure package is initialized before creating tool windows
+            LogExtended($"VSPilotPackage: InitializeToolWindowAsync called for {toolWindowType.Name}");
             if (!_isInitialized)
             {
-                Debug.WriteLine("Package not initialized, waiting 1000ms");
+                LogExtended("VSPilotPackage: Package not initialized yet, waiting 1000ms");
                 await Task.Delay(1000, cancellationToken);
             }
-
             if (toolWindowType == typeof(ChatWindow))
             {
-                Debug.WriteLine("Initializing ChatWindow");
+                LogExtended("VSPilotPackage: Initializing ChatWindow");
                 await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-
                 var chatWindow = new ChatWindow();
-                Debug.WriteLine($"ChatWindow created. Caption: {chatWindow.Caption}");
-
+                LogExtended($"VSPilotPackage: ChatWindow created. Caption: {chatWindow.Caption}");
                 return chatWindow;
             }
-
             return await base.InitializeToolWindowAsync(toolWindowType, id, cancellationToken);
         }
         #endregion
+
+        // Extended logging helpers.
+        private void LogExtended(string message)
+        {
+            Debug.WriteLine(message);
+            Console.WriteLine(message);
+        }
+
+        private static void LogExtendedStatic(string message)
+        {
+            Debug.WriteLine(message);
+            Console.WriteLine(message);
+        }
+    }
+
+    // Updated fallback implementation for ConfigurationService.
+    // The parameterless constructor calls the base constructor
+    // with a null-forgiving AsyncPackage and a NullLogger instance.
+    public class DefaultConfigurationService : ConfigurationService
+    {
+        public DefaultConfigurationService()
+            : base(null!, NullLogger<ConfigurationService>.Instance)
+        {
+        }
+
+        // Implement additional members as appropriate.
     }
 }

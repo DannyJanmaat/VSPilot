@@ -16,7 +16,7 @@ using VSPilot.UI.ViewModels;
 
 namespace VSPilot.UI.Windows
 {
-    // Inline converter klasse
+    // Inline converter class
     public class InverseBooleanConverterLocal : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -46,127 +46,99 @@ namespace VSPilot.UI.Windows
                 _logger = logger;
                 _package = package;
 
-                // Initialize the component
                 InitializeComponent();
                 Debug.WriteLine("ChatWindowControl: InitializeComponent completed");
 
-                // Add a status message overlay immediately
                 AddStatusMessage("VSPilot Chat is initializing...");
                 Debug.WriteLine("ChatWindowControl: Added status message");
 
-                // Handle UI events
                 Loaded += OnControlLoaded;
                 chatInput.KeyDown += OnChatInputKeyDown;
                 clearButton.Click += OnClearButtonClick;
                 Debug.WriteLine("ChatWindowControl: Event handlers registered");
 
-                // Start initialization in the background to avoid deadlocks
                 InitializeInBackground();
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error in ChatWindowControl constructor");
                 Debug.WriteLine($"ChatWindowControl constructor error: {ex.Message}\n{ex.StackTrace}");
-
-                // Try to show error in UI
                 try
                 {
                     AddStatusMessage($"Error initializing chat: {ex.Message}");
                 }
-                catch
-                {
-                    // Last resort if even the status message fails
-                }
+                catch { }
             }
         }
 
         private void InitializeInBackground()
         {
-            // Use AsyncPackage's JoinableTaskFactory if available
             if (_package != null)
             {
-                // Fixed CS1998: Add the missing method body that was removed
                 var joinableTask = _package.JoinableTaskFactory.RunAsync(async () =>
                 {
                     try
                     {
-                        // Switch to background thread
                         await Task.Yield();
+                        Debug.WriteLine("ChatWindowControl: After Task.Yield() in background initialization");
 
-                        // Give UI time to render
                         await Task.Delay(500);
+                        Debug.WriteLine("ChatWindowControl: Delay completed in background initialization");
 
-                        // Switch to UI thread for initialization
                         await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        Debug.WriteLine("ChatWindowControl: Switched to UI thread for background initialization");
 
-                        // Get automation service
                         AutomationService? automationService = null;
-                        if (_package != null)
+                        try
                         {
-                            try
-                            {
-                                // Use IServiceProvider explicit cast to avoid type inference problems
-                                var service = ((IServiceProvider)_package).GetService(typeof(AutomationService));
-                                automationService = service as AutomationService;
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"Failed to get AutomationService: {ex.Message}");
-                            }
+                            var service = ((IServiceProvider)_package).GetService(typeof(AutomationService));
+                            automationService = service as AutomationService;
+                            Debug.WriteLine("ChatWindowControl: AutomationService retrieved successfully");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"ChatWindowControl: Failed to get AutomationService: {ex.Message}");
                         }
 
-                        // Initialize the control
                         Initialize(automationService);
+                        Debug.WriteLine("ChatWindowControl: Initialize method called from background task");
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
-
+                        Debug.WriteLine($"ChatWindowControl: Background initialization error: {ex.Message}\n{ex.StackTrace}");
                         try
                         {
                             await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
                             UpdateStatusMessage($"Error initializing chat: {ex.Message}");
                         }
-                        catch
-                        {
-                            // Ignore errors in error handling
-                        }
+                        catch { }
                     }
                 });
 
-                // Properly observe results to fix VSTHRD110
-                var continuationTask = joinableTask.Task.ContinueWith(t =>
+                joinableTask.Task.ContinueWith(t =>
                 {
                     if (t.IsFaulted && _logger != null)
                     {
                         _logger.LogError(t.Exception, "Background initialization failed");
                     }
-                }, TaskScheduler.Default);
+                }, TaskScheduler.Default).Forget();
 
-                // Join the task to avoid fire-and-forget
                 joinableTask.JoinAsync().Forget();
             }
             else
             {
-                // Use a safer approach with Task.Run to avoid VSSDK007
                 var backgroundTask = Task.Run(async () =>
                 {
                     try
                     {
-                        // Switch to background thread
                         await Task.Yield();
-
                         await Task.Delay(500);
-
-                        // Remove ConfigureAwait(true) - it's not supported on MainThreadAwaitable
                         await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
                         Initialize(null);
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Background initialization error: {ex.Message}\n{ex.StackTrace}");
-
+                        Debug.WriteLine($"ChatWindowControl: Background initialization error: {ex.Message}\n{ex.StackTrace}");
                         try
                         {
                             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -176,17 +148,15 @@ namespace VSPilot.UI.Windows
                     }
                 });
 
-                // Observe the task result to avoid unhandled exceptions
-                var continuationResult = backgroundTask.ContinueWith(t =>
+                backgroundTask.ContinueWith(t =>
                 {
                     if (t.IsFaulted)
                     {
-                        Debug.WriteLine($"Background initialization failed: {t.Exception}");
+                        Debug.WriteLine($"ChatWindowControl: Background initialization failed: {t.Exception}");
                     }
-                }, TaskScheduler.Default);
+                }, TaskScheduler.Default).Forget();
             }
         }
-
 
         private Task RunBackgroundTaskAsync(Func<Task> taskFunc)
         {
@@ -196,10 +166,8 @@ namespace VSPilot.UI.Windows
             }
             else
             {
-                // Fix: Replace ThreadHelper.JoinableTaskFactory with Task.Run
                 return Task.Run(async () =>
                 {
-                    // Use ConfigureAwait(false) to avoid returning to the UI thread unnecessarily
                     await taskFunc().ConfigureAwait(false);
                 });
             }
@@ -209,11 +177,9 @@ namespace VSPilot.UI.Windows
         {
             try
             {
-                // Create a semi-transparent overlay with the status message
                 _statusOverlay = new Grid
                 {
-                    Background = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromArgb(200, 240, 240, 240))
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(200, 240, 240, 240))
                 };
 
                 _statusMessage = new TextBlock
@@ -228,20 +194,18 @@ namespace VSPilot.UI.Windows
 
                 _ = _statusOverlay.Children.Add(_statusMessage);
 
-                // Replace the entire content with the overlay
-                // We'll store the original content and restore it later
                 object originalContent = Content;
                 Content = _statusOverlay;
 
-                // Store the original content in the overlay's Tag property
                 if (originalContent != null)
                 {
                     _statusOverlay.Tag = originalContent;
                 }
+                Debug.WriteLine($"ChatWindowControl: Status message added: {message}");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to add status message: {ex.Message}");
+                Debug.WriteLine($"ChatWindowControl: Failed to add status message: {ex.Message}");
             }
         }
 
@@ -252,11 +216,12 @@ namespace VSPilot.UI.Windows
                 if (_statusMessage != null)
                 {
                     _statusMessage.Text = message;
+                    Debug.WriteLine($"ChatWindowControl: Status message updated: {message}");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to update status message: {ex.Message}");
+                Debug.WriteLine($"ChatWindowControl: Failed to update status message: {ex.Message}");
             }
         }
 
@@ -266,19 +231,18 @@ namespace VSPilot.UI.Windows
             {
                 if (_statusOverlay != null && Content == _statusOverlay)
                 {
-                    // Restore the original content if we saved it
                     if (_statusOverlay.Tag is UIElement originalContent)
                     {
                         Content = originalContent;
                     }
-
                     _statusOverlay = null;
                     _statusMessage = null;
+                    Debug.WriteLine("ChatWindowControl: Status message removed");
                 }
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Failed to remove status message: {ex.Message}");
+                Debug.WriteLine($"ChatWindowControl: Failed to remove status message: {ex.Message}");
             }
         }
 
@@ -288,17 +252,15 @@ namespace VSPilot.UI.Windows
             {
                 Debug.WriteLine("ChatWindowControl: OnControlLoaded called");
 
-                // Start a timeout timer to detect hangs
                 StartInitializationTimeout();
 
-                // Focus the input field - do this directly on the UI thread
                 _ = chatInput.Focus();
                 Debug.WriteLine("ChatWindowControl: Focus set to chat input");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error in OnControlLoaded");
-                Debug.WriteLine($"OnControlLoaded error: {ex.Message}\n{ex.StackTrace}");
+                Debug.WriteLine($"ChatWindowControl: OnControlLoaded error: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -310,10 +272,7 @@ namespace VSPilot.UI.Windows
                 {
                     try
                     {
-                        // Wait 10 seconds
                         await Task.Delay(10000);
-
-                        // If we still have the status message, initialization might be hanging
                         if (_statusMessage != null)
                         {
                             await _package.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -323,24 +282,18 @@ namespace VSPilot.UI.Windows
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Timeout task error: {ex.Message}");
+                        Debug.WriteLine($"ChatWindowControl: Timeout task error: {ex.Message}");
                     }
                 });
-
-                // Join the task to prevent fire-and-forget issues
                 joinableTask.JoinAsync().Forget();
             }
             else
             {
-                // Fix: Store the Task.Run result in a variable to observe it
                 var timeoutTask = Task.Run(async () =>
                 {
                     try
                     {
-                        // Wait 10 seconds
                         await Task.Delay(10000);
-
-                        // If we still have the status message, initialization might be hanging
                         if (_statusMessage != null)
                         {
                             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -350,18 +303,17 @@ namespace VSPilot.UI.Windows
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"Timeout task error: {ex.Message}");
+                        Debug.WriteLine($"ChatWindowControl: Timeout task error: {ex.Message}");
                     }
                 });
 
-                // Add this to silence VSTHRD110 warning
-                _ = timeoutTask.ContinueWith(t =>
+                timeoutTask.ContinueWith(t =>
                 {
                     if (t.IsFaulted)
                     {
-                        Debug.WriteLine($"Timeout task failed: {t.Exception}");
+                        Debug.WriteLine($"ChatWindowControl: Timeout task failed: {t.Exception}");
                     }
-                }, TaskScheduler.Default);
+                }, TaskScheduler.Default).Forget();
             }
         }
 
@@ -377,38 +329,32 @@ namespace VSPilot.UI.Windows
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine("RunBackgroundTask: Exception in background task: " + ex);
+                        Debug.WriteLine($"ChatWindowControl: Exception in background task: {ex}");
                     }
                 });
-
-                // Join it to avoid fire-and-forget issues
                 joinableTask.JoinAsync().Forget();
             }
             else
             {
-                Debug.WriteLine("Warning: AsyncPackage not available, using Task.Run as fallback.");
-                // Fix: Store Task.Run result in a variable to observe it
+                Debug.WriteLine("ChatWindowControl: AsyncPackage not available, using Task.Run as fallback");
                 var task = Task.Run(async () =>
                 {
                     try
                     {
-                        // ConfigureAwait(false) to avoid deadlocks
                         await taskFunc().ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine("RunBackgroundTask (fallback): Exception in background task: " + ex);
+                        Debug.WriteLine($"ChatWindowControl: Exception in background Task.Run: {ex}");
                     }
                 });
-
-                // Add this to silence VSTHRD110 warning
-                _ = task.ContinueWith(t =>
+                task.ContinueWith(t =>
                 {
                     if (t.IsFaulted)
                     {
-                        Debug.WriteLine($"Background task failed: {t.Exception}");
+                        Debug.WriteLine($"ChatWindowControl: Background task failed: {t.Exception}");
                     }
-                }, TaskScheduler.Default);
+                }, TaskScheduler.Default).Forget();
             }
         }
 
@@ -416,7 +362,6 @@ namespace VSPilot.UI.Windows
         {
             try
             {
-                // Send message on Enter (without Shift)
                 if (e.Key == Key.Return && (Keyboard.Modifiers & ModifierKeys.Shift) != ModifierKeys.Shift)
                 {
                     e.Handled = true;
@@ -426,7 +371,7 @@ namespace VSPilot.UI.Windows
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error processing chat input key");
-                Debug.WriteLine($"Chat input key error: {ex.Message}");
+                Debug.WriteLine($"ChatWindowControl: Chat input key error: {ex.Message}");
             }
         }
 
@@ -440,7 +385,7 @@ namespace VSPilot.UI.Windows
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error clearing chat input");
-                Debug.WriteLine($"Chat input clear error: {ex.Message}");
+                Debug.WriteLine($"ChatWindowControl: Chat input clear error: {ex.Message}");
             }
         }
 
@@ -449,14 +394,14 @@ namespace VSPilot.UI.Windows
             if (ViewModel?.SendMessageCommand == null)
             {
                 _logger?.LogWarning("SendMessageCommand is not available");
-                Debug.WriteLine("SendMessageCommand is not available");
+                Debug.WriteLine("ChatWindowControl: SendMessageCommand is not available");
                 return;
             }
-
             if (ViewModel.SendMessageCommand.CanExecute(null))
             {
                 ViewModel.SendMessageCommand.Execute(null);
                 chatInput.Clear();
+                Debug.WriteLine("ChatWindowControl: Message sent and chat input cleared");
             }
         }
 
@@ -466,42 +411,31 @@ namespace VSPilot.UI.Windows
             {
                 Debug.WriteLine("ChatWindowControl: Initialize method called");
 
-                // We should be on the UI thread here, but let's check to be sure
                 if (!ThreadHelper.CheckAccess())
                 {
-                    Debug.WriteLine("WARNING: Initialize called from non-UI thread!");
+                    Debug.WriteLine("ChatWindowControl: WARNING: Initialize called from non-UI thread!");
                     throw new InvalidOperationException("Initialize must be called from the UI thread");
                 }
 
                 if (automationService == null)
                 {
                     _logger?.LogWarning("AutomationService is null in ChatWindowControl.Initialize()");
-                    Debug.WriteLine("Warning: AutomationService is null in ChatWindowControl.Initialize()");
+                    Debug.WriteLine("ChatWindowControl: Warning - AutomationService is null");
                     UpdateStatusMessage("Warning: AutomationService is not available. Some features may not work.");
                 }
 
-                // Create ViewModel with optional parameters - this should be lightweight
                 Debug.WriteLine("ChatWindowControl: Creating ViewModel");
-                DataContext = new ChatViewModel(
-                    automationService,
-                    chatInput,
-                    viewModelLogger
-                );
+                DataContext = new ChatViewModel(automationService, chatInput, viewModelLogger);
                 Debug.WriteLine("ChatWindowControl: ViewModel created successfully");
 
-                // Remove the status message if initialization was successful
                 RemoveStatusMessage();
                 Debug.WriteLine("ChatWindowControl: Initialization completed successfully");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error initializing ChatWindowControl");
-                Debug.WriteLine($"ChatWindowControl initialization error: {ex.Message}\n{ex.StackTrace}");
-
-                // Update the status message with the error
+                Debug.WriteLine($"ChatWindowControl: Initialization error: {ex.Message}\n{ex.StackTrace}");
                 UpdateStatusMessage($"Error initializing chat: {ex.Message}");
-
-                // Fallback to a minimal ViewModel
                 try
                 {
                     DataContext = new ChatViewModel(null, chatInput);
@@ -509,7 +443,7 @@ namespace VSPilot.UI.Windows
                 }
                 catch (Exception fallbackEx)
                 {
-                    Debug.WriteLine($"Failed to create fallback ViewModel: {fallbackEx.Message}");
+                    Debug.WriteLine($"ChatWindowControl: Fallback ViewModel creation failed: {fallbackEx.Message}");
                 }
             }
         }

@@ -142,6 +142,7 @@
     <Compile Include="VSPilot.Common\Models\VSPilotErrorItem.cs" />
     <Compile Include="VSPilot.Common\Models\VSPilotSettings.cs" />
     <Compile Include="VSPilot.Common\ViewModels\ViewModelBase.cs" />
+	<Compile Include="VSPilot.Common\Utilities\ConsoleHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="VSPilot.Tests\AutomationTests\ProjectManagerTests.cs" />
