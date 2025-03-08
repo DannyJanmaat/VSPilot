@@ -3,6 +3,7 @@ using EnvDTE80;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.Settings;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,29 +27,53 @@ namespace VSPilot.Core.AI
         private readonly ILogger<LanguageProcessor>? _languageProcessorLogger;
         private readonly string _apiKey;
         private const string API_ENDPOINT = "https://api.openai.com/v1/completions";
+        private readonly IServiceProvider _serviceProvider;
 
-        public AIRequestHandler(ILogger<AIRequestHandler> logger, VSPilotAIIntegration aiIntegration)
+        public AIRequestHandler(IServiceProvider serviceProvider, ILogger<AIRequestHandler> logger, VSPilotAIIntegration aiIntegration)
         {
             // Validate parameters
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _integration = aiIntegration ?? throw new ArgumentNullException(nameof(aiIntegration));
             _aiIntegration = aiIntegration; // Set this field too for consistency
 
-            ThreadHelper.ThrowIfNotOnUIThread();
-
             // Get DTE service
-            // Fix for CS8600: Converting null literal or possible null value to non-nullable type.
-            _dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE2;
+            _dte = _serviceProvider.GetService(typeof(DTE)) as DTE2;
             if (_dte == null)
             {
                 _logger.LogWarning("DTE service not available");
             }
 
             // Try to get AsyncPackage service, but don't throw if it's not available
-            _package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
+            _package = _serviceProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
             if (_package == null)
             {
                 _logger.LogWarning("AsyncPackage service not available");
+
+                // Try to get it from the global provider as a fallback
+                _package = ServiceProvider.GlobalProvider.GetService(typeof(AsyncPackage)) as AsyncPackage;
+                if (_package == null)
+                {
+                    _logger.LogWarning("AsyncPackage service not available from GlobalProvider either");
+
+                    // Try to get it from the package that hosts this service
+                    if (_serviceProvider is IVsPackage package)
+                    {
+                        _package = package as AsyncPackage;
+                        if (_package != null)
+                        {
+                            _logger.LogInformation("AsyncPackage service obtained from IVsPackage");
+                        }
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("AsyncPackage service obtained from GlobalProvider");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("AsyncPackage service obtained from service provider");
             }
 
             // Initialize HttpClient
@@ -65,19 +90,6 @@ namespace VSPilot.Core.AI
             });
             _languageProcessor = new LanguageProcessor(loggerFactory.CreateLogger<LanguageProcessor>()); // Assign _languageProcessor here
 
-            // Don't throw exceptions for missing services, just log warnings
-            if (_dte == null)
-            {
-                _logger.LogWarning("DTE service not available");
-            }
-
-            if (_package == null)
-            {
-                _logger.LogWarning("AsyncPackage service not available");
-            }
-
-            // Continue with initialization that doesn't depend on _package
-
             // Initialize other properties
             _apiKey = GetApiKey();
 
@@ -88,6 +100,12 @@ namespace VSPilot.Core.AI
                 _httpClient.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
             }
+        }
+
+        // Constructor overload that accepts just the essential dependencies
+        public AIRequestHandler(ILogger<AIRequestHandler> logger, VSPilotAIIntegration aiIntegration)
+            : this(ServiceProvider.GlobalProvider, logger, aiIntegration)
+        {
         }
 
         public async Task<ProjectChangeRequest> AnalyzeRequestAsync(string userRequest)
@@ -237,16 +255,51 @@ namespace VSPilot.Core.AI
 
         private string GetApiKey()
         {
-            // Implement your API key retrieval logic here
-            // For example:
-            return ""; // Return an empty string or retrieve from settings
+            // First try to get from settings
+            string apiKey = GetApiKeyFromSettings();
+
+            // If not found, try environment variables
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                apiKey = Environment.GetEnvironmentVariable("VSPILOT_API_KEY") ?? string.Empty;
+            }
+
+            return apiKey;
         }
 
         private string GetApiKeyFromSettings()
         {
             try
             {
-                // Read from secure storage or environment
+                // Try to get from configuration service if available
+                if (_package != null)
+                {
+                    // Use await with JoinableTaskFactory to avoid VSTHRD002 warning
+                    var settingsManagerTask = ThreadHelper.JoinableTaskFactory.Run(async () =>
+                        await _package.GetServiceAsync(typeof(SVsSettingsManager)));
+
+                    if (settingsManagerTask is SettingsManager settingsManager)
+                    {
+                        // Create a WritableSettingsStore from the SettingsManager
+                        var settingsStore = settingsManager.GetReadOnlySettingsStore(SettingsScope.UserSettings);
+
+                        // Check if our collection exists
+                        if (settingsStore.CollectionExists("VSPilot"))
+                        {
+                            // Try to get the API key from settings
+                            if (settingsStore.PropertyExists("VSPilot", "ApiKey"))
+                            {
+                                string apiKey = settingsStore.GetString("VSPilot", "ApiKey");
+                                if (!string.IsNullOrEmpty(apiKey))
+                                {
+                                    return apiKey;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to environment variable
                 return Environment.GetEnvironmentVariable("VSPILOT_API_KEY") ?? string.Empty;
             }
             catch (Exception ex)
@@ -262,7 +315,7 @@ namespace VSPilot.Core.AI
             // Enhance solution context gathering using VSPilotAIIntegration
             try
             {
-                IVsSolution solution = ServiceProvider.GlobalProvider.GetService(typeof(SVsSolution)) as IVsSolution;
+                IVsSolution solution = _serviceProvider.GetService(typeof(SVsSolution)) as IVsSolution;
                 if (solution != null)
                 {
                     System.Text.StringBuilder contextBuilder = new System.Text.StringBuilder();
@@ -290,14 +343,26 @@ namespace VSPilot.Core.AI
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             List<Project> projects = new List<EnvDTE.Project>();
-            DTE dte = ServiceProvider.GlobalProvider.GetService(typeof(DTE)) as DTE;
-            if (dte != null)
+
+            if (_dte != null)
             {
-                foreach (EnvDTE.Project project in dte.Solution.Projects)
+                foreach (EnvDTE.Project project in _dte.Solution.Projects)
                 {
                     projects.Add(project);
                 }
             }
+            else
+            {
+                DTE dte = _serviceProvider.GetService(typeof(DTE)) as DTE;
+                if (dte != null)
+                {
+                    foreach (EnvDTE.Project project in dte.Solution.Projects)
+                    {
+                        projects.Add(project);
+                    }
+                }
+            }
+
             return projects;
         }
 
@@ -308,18 +373,44 @@ namespace VSPilot.Core.AI
 
         public async Task<string> GetErrorFixAsync(VSPilotErrorItem error)
         {
-            await Task.CompletedTask; // Or remove async if no async work is needed
-                                      // Or use Task.Run if doing CPU-bound work
-            return "Error fix suggestion";
+            if (error == null)
+            {
+                throw new ArgumentNullException(nameof(error));
+            }
+
+            try
+            {
+                string prompt = await FormatErrorFixPromptAsync(error);
+                string response = await GetAIResponseAsync(prompt);
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get error fix for {ErrorDescription}", error.Description);
+                return "Error fix suggestion could not be generated.";
+            }
         }
 
         private async Task<string> FormatErrorFixPromptAsync(VSPilotErrorItem error)
         {
             // Get file content for context
-            string fileContent;
-            using (StreamReader reader = new StreamReader(error.FileName))
+            string fileContent = string.Empty;
+            try
             {
-                fileContent = await reader.ReadToEndAsync();
+                if (File.Exists(error.FileName))
+                {
+                    // Use using declaration with await to simplify code (IDE0063)
+                    using var reader = new StreamReader(error.FileName);
+                    fileContent = await reader.ReadToEndAsync();
+                }
+                else
+                {
+                    _logger.LogWarning("File not found: {FileName}", error.FileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read file content: {FileName}", error.FileName);
             }
 
             return $@"Fix the following compilation error:

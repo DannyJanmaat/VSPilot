@@ -50,6 +50,23 @@ namespace VSPilot.Core.Build
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+                // Check if a solution is open
+                object isOpenObj = null;
+                int hr = _solution.GetProperty((int)__VSPROPID.VSPROPID_IsSolutionOpen, out isOpenObj);
+                bool isSolutionOpen = hr == 0 && isOpenObj is bool isOpen && isOpen;
+
+                if (!isSolutionOpen)
+                {
+                    _logger.LogWarning("No solution is currently open. Cannot build.");
+                    OnBuildCompleted(new BuildStatus
+                    {
+                        ErrorMessage = "No solution is currently open",
+                        IsSuccessful = false
+                    });
+                    return false;
+                }
+
                 _buildStartTime = DateTime.Now;
 
                 _logger.LogInformation("Starting solution build");
@@ -84,6 +101,7 @@ namespace VSPilot.Core.Build
                 return false;
             }
         }
+
 
         private async Task<BuildStatus> TryAIAssistedBuildRepairAsync(BuildStatus currentStatus, CancellationToken cancellationToken)
         {
@@ -183,6 +201,18 @@ namespace VSPilot.Core.Build
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+                // Check if a solution is open
+                object isOpenObj = null;
+                int hr = _solution.GetProperty((int)__VSPROPID.VSPROPID_IsSolutionOpen, out isOpenObj);
+                bool isSolutionOpen = hr == 0 && isOpenObj is bool isOpen && isOpen;
+
+                if (!isSolutionOpen)
+                {
+                    _logger.LogWarning("No solution is currently open. Skipping solution clean.");
+                    return;
+                }
+
                 _logger.LogInformation("Cleaning solution");
 
                 _dte.Solution.SolutionBuild.Clean(true);
@@ -198,6 +228,7 @@ namespace VSPilot.Core.Build
             }
         }
 
+
         public async Task<bool> BuildProjectAsync(
             string projectName,
             CancellationToken cancellationToken = default)
@@ -205,6 +236,18 @@ namespace VSPilot.Core.Build
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+                // Check if a solution is open
+                object isOpenObj = null;
+                int hr = _solution.GetProperty((int)__VSPROPID.VSPROPID_IsSolutionOpen, out isOpenObj);
+                bool isSolutionOpen = hr == 0 && isOpenObj is bool isOpen && isOpen;
+
+                if (!isSolutionOpen)
+                {
+                    _logger.LogWarning($"No solution is currently open. Cannot build project: {projectName}");
+                    return false;
+                }
+
                 _logger.LogInformation($"Building project: {projectName}");
 
                 var project = FindProject(projectName);
@@ -228,6 +271,7 @@ namespace VSPilot.Core.Build
                 return false;
             }
         }
+
 
         private Project FindProject(string projectName)
         {

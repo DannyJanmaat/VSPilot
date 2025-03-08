@@ -46,28 +46,45 @@ namespace VSPilot.UI.Windows
                 _logger = logger;
                 _package = package;
 
+                // Initialize the component
                 InitializeComponent();
                 Debug.WriteLine("ChatWindowControl: InitializeComponent completed");
 
+                // Add a status message overlay immediately
                 AddStatusMessage("VSPilot Chat is initializing...");
                 Debug.WriteLine("ChatWindowControl: Added status message");
 
+                // Handle UI events
                 Loaded += OnControlLoaded;
                 chatInput.KeyDown += OnChatInputKeyDown;
                 clearButton.Click += OnClearButtonClick;
+                sendButton.Click += OnSendButtonClick; // Add this line
                 Debug.WriteLine("ChatWindowControl: Event handlers registered");
-
-                InitializeInBackground();
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error in ChatWindowControl constructor");
                 Debug.WriteLine($"ChatWindowControl constructor error: {ex.Message}\n{ex.StackTrace}");
+                // Try to show error in UI
                 try
                 {
                     AddStatusMessage($"Error initializing chat: {ex.Message}");
                 }
-                catch { }
+                catch
+                {
+                    // Last resort if even the status message fails
+                }
+            }
+        }
+
+        private void OnSendButtonClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                TrySendMessage();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Send button click error: {ex.Message}");
             }
         }
 
@@ -391,19 +408,36 @@ namespace VSPilot.UI.Windows
 
         private void TrySendMessage()
         {
+            Debug.WriteLine("ChatWindowControl: TrySendMessage called");
+
             if (ViewModel?.SendMessageCommand == null)
             {
-                _logger?.LogWarning("SendMessageCommand is not available");
                 Debug.WriteLine("ChatWindowControl: SendMessageCommand is not available");
+                UpdateStatusMessage("Chat is not fully initialized yet. Please try again in a moment.");
                 return;
             }
+
+            if (string.IsNullOrWhiteSpace(chatInput.Text))
+            {
+                Debug.WriteLine("ChatWindowControl: Chat input is empty");
+                return;
+            }
+
+            Debug.WriteLine($"ChatWindowControl: Sending message: {chatInput.Text}");
+
             if (ViewModel.SendMessageCommand.CanExecute(null))
             {
                 ViewModel.SendMessageCommand.Execute(null);
                 chatInput.Clear();
-                Debug.WriteLine("ChatWindowControl: Message sent and chat input cleared");
+                chatInput.Focus();
+            }
+            else
+            {
+                Debug.WriteLine("ChatWindowControl: SendMessageCommand cannot execute");
+                UpdateStatusMessage("Cannot send message at this time. Please try again later.");
             }
         }
+
 
         public void Initialize(AutomationService? automationService, ILogger<ChatViewModel>? viewModelLogger = null)
         {
