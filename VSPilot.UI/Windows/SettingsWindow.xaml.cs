@@ -1,9 +1,11 @@
-﻿using Microsoft.VisualStudio.PlatformUI;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.PlatformUI;
 using System;
 using System.Windows;
 using VSPilot.Core.Services;
 using VSPilot.UI.ViewModels;
-using Microsoft.Extensions.Logging;
+using System.ComponentModel;
+using System.Windows.Controls;
 
 namespace VSPilot.UI.Windows
 {
@@ -25,10 +27,10 @@ namespace VSPilot.UI.Windows
 
                 // Create ViewModel
                 _viewModel = new SettingsViewModel(configService, viewModelLogger);
-                DataContext = _viewModel;
+                base.DataContext = _viewModel; // Use base.DataContext instead of this.DataContext
 
                 // Subscribe to events
-                Closing += OnWindowClosing;
+                base.Closed += (s, e) => OnWindowClosing(s, new CancelEventArgs(false)); // Use Closed event instead of Closing
                 _viewModel.ErrorOccurred += OnViewModelError;
             }
             catch (Exception ex)
@@ -44,7 +46,7 @@ namespace VSPilot.UI.Windows
             {
                 if (_viewModel.HasUnsavedChanges)
                 {
-                    var result = MessageBox.Show(
+                    MessageBoxResult result = MessageBox.Show(
                         "You have unsaved changes. Do you want to save them?",
                         "VSPilot Settings",
                         MessageBoxButton.YesNoCancel,
@@ -68,7 +70,7 @@ namespace VSPilot.UI.Windows
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error handling window closing");
-                MessageBox.Show(
+                _ = MessageBox.Show(
                     $"An error occurred while closing the settings window: {ex.Message}",
                     "VSPilot Error",
                     MessageBoxButton.OK,
@@ -79,7 +81,7 @@ namespace VSPilot.UI.Windows
         private void OnViewModelError(object sender, string errorMessage)
         {
             _logger?.LogWarning("ViewModel error: {ErrorMessage}", errorMessage);
-            MessageBox.Show(
+            _ = MessageBox.Show(
                 errorMessage,
                 "VSPilot Settings Error",
                 MessageBoxButton.OK,
@@ -88,7 +90,7 @@ namespace VSPilot.UI.Windows
 
         private void HandleInitializationError(Exception ex)
         {
-            MessageBox.Show(
+            _ = MessageBox.Show(
                 $"Failed to initialize settings window: {ex.Message}",
                 "VSPilot Initialization Error",
                 MessageBoxButton.OK,
