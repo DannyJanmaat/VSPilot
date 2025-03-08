@@ -227,7 +227,8 @@ namespace VSPilot.UI.Windows
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
                 // Use direct cast instead of generic method
-                var service = package.GetService(typeof(AutomationService)) as AutomationService;
+                object? serviceObj = package.GetService(typeof(AutomationService));
+                var service = serviceObj as AutomationService;
 
                 if (service != null)
                 {
@@ -244,6 +245,7 @@ namespace VSPilot.UI.Windows
                 return null;
             }
         }
+
 
         private void OnControlUnloaded(object sender, RoutedEventArgs e)
         {

@@ -3,14 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:converters="clr-namespace:VSPilot.UI.Converters"
+             xmlns:local="clr-namespace:VSPilot.UI.Windows"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
 
     <UserControl.Resources>
         <ResourceDictionary>
             <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
-            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <!-- Inline converter definitie -->
+            <local:InverseBooleanConverterLocal x:Key="InverseBooleanConverter"/>
             <SolidColorBrush x:Key="UserMessageBackground" Color="#E6F0FA"/>
             <SolidColorBrush x:Key="AIMessageBackground" Color="White"/>
         </ResourceDictionary>

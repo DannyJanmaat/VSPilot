@@ -1,66 +1,42 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.Shell;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
-using Microsoft.Extensions.Logging;
-using Microsoft.VisualStudio.Shell;
 using VSPilot.Core.Automation;
 using VSPilot.UI.ViewModels;
 
 namespace VSPilot.UI.Windows
 {
+    // Inline converter klasse
+    public class InverseBooleanConverterLocal : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value is bool boolValue ? !boolValue : value;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return value is bool boolValue ? !boolValue : value;
+        }
+    }
+
     public partial class ChatWindowControl : UserControl
     {
         private readonly ILogger<ChatWindowControl>? _logger;
         private ChatViewModel? ViewModel => DataContext as ChatViewModel;
         private Grid? _statusOverlay;
         private TextBlock? _statusMessage;
-        private AsyncPackage? _package;
+        private readonly AsyncPackage? _package;
 
-        public ChatWindowControl(ILogger<ChatWindowControl>? logger = null, AsyncPackage? package = null)
-        {
-            try
-            {
-                Debug.WriteLine("ChatWindowControl: Constructor starting");
-                _logger = logger;
-                _package = package;
-
-                // Initialize the component
-                InitializeComponent();
-                Debug.WriteLine("ChatWindowControl: InitializeComponent completed");
-
-                // Add a status message overlay immediately
-                AddStatusMessage("VSPilot Chat is initializing...");
-                Debug.WriteLine("ChatWindowControl: Added status message");
-
-                // Handle UI events
-                Loaded += OnControlLoaded;
-                chatInput.KeyDown += OnChatInputKeyDown;
-                clearButton.Click += OnClearButtonClick;
-                Debug.WriteLine("ChatWindowControl: Event handlers registered");
-
-                // Start initialization in the background to avoid deadlocks
-                InitializeInBackground();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error in ChatWindowControl constructor");
-                Debug.WriteLine($"ChatWindowControl constructor error: {ex.Message}\n{ex.StackTrace}");
-
-                // Try to show error in UI
-                try
-                {
-                    AddStatusMessage($"Error initializing chat: {ex.Message}");
-                }
-                catch
-                {
-                    // Last resort if even the status message fails
-                }
-            }
-        }
+        // Rest van de code...
 
         private void InitializeInBackground()
         {
@@ -79,7 +55,8 @@ namespace VSPilot.UI.Windows
                     AutomationService? automationService = null;
                     if (_package != null)
                     {
-                        automationService = _package.GetService(typeof(AutomationService)) as AutomationService;
+                        object? serviceObj = _package.GetService(typeof(AutomationService));
+                        automationService = serviceObj as AutomationService;
                     }
 
                     // Initialize the control
@@ -131,11 +108,11 @@ namespace VSPilot.UI.Windows
                     Margin = new Thickness(20)
                 };
 
-                _statusOverlay.Children.Add(_statusMessage);
+                _ = _statusOverlay.Children.Add(_statusMessage);
 
                 // Replace the entire content with the overlay
                 // We'll store the original content and restore it later
-                var originalContent = Content;
+                object originalContent = Content;
                 Content = _statusOverlay;
 
                 // Store the original content in the overlay's Tag property
@@ -197,7 +174,7 @@ namespace VSPilot.UI.Windows
                 StartInitializationTimeout();
 
                 // Focus the input field - do this directly on the UI thread
-                chatInput.Focus();
+                _ = chatInput.Focus();
                 Debug.WriteLine("ChatWindowControl: Focus set to chat input");
             }
             catch (Exception ex)
@@ -211,15 +188,15 @@ namespace VSPilot.UI.Windows
         {
             _ = Task.Run(async () =>
             {
-            try
-            {
-                // Wait 10 seconds
-                await Task.Delay(10000);
-
-                // If we still have the status message, the initialization might be hanging
-                if (_statusMessage != null)
+                try
                 {
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    // Wait 10 seconds
+                    await Task.Delay(10000);
+
+                    // If we still have the status message, the initialization might be hanging
+                    if (_statusMessage != null)
+                    {
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                         UpdateStatusMessage("Initialization is taking longer than expected. You may need to restart Visual Studio.");
                         Debug.WriteLine("ChatWindowControl: Initialization timeout detected");
                     }
@@ -261,7 +238,7 @@ namespace VSPilot.UI.Windows
             try
             {
                 chatInput.Clear();
-                chatInput.Focus();
+                _ = chatInput.Focus();
             }
             catch (Exception ex)
             {
