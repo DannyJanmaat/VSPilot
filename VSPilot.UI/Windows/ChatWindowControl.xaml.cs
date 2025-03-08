@@ -15,6 +15,7 @@ namespace VSPilot.UI.Windows
     {
         private readonly ILogger<ChatWindowControl>? _logger;
         private ChatViewModel? ViewModel => DataContext as ChatViewModel;
+        private Grid? _statusOverlay;
         private TextBlock? _statusMessage;
 
         public ChatWindowControl(ILogger<ChatWindowControl>? logger = null)
@@ -60,7 +61,7 @@ namespace VSPilot.UI.Windows
             try
             {
                 // Create a semi-transparent overlay with the status message
-                var overlay = new Grid
+                _statusOverlay = new Grid
                 {
                     Background = new System.Windows.Media.SolidColorBrush(
                         System.Windows.Media.Color.FromArgb(200, 240, 240, 240))
@@ -76,18 +77,17 @@ namespace VSPilot.UI.Windows
                     Margin = new Thickness(20)
                 };
 
-                overlay.Children.Add(_statusMessage);
+                _statusOverlay.Children.Add(_statusMessage);
 
-                // Add the overlay to the main grid
-                if (mainGrid != null)
+                // Replace the entire content with the overlay
+                // We'll store the original content and restore it later
+                var originalContent = Content;
+                Content = _statusOverlay;
+
+                // Store the original content in the overlay's Tag property
+                if (originalContent != null)
                 {
-                    mainGrid.Children.Add(overlay);
-                    Grid.SetRowSpan(overlay, 3); // Span all rows
-                }
-                else
-                {
-                    // If mainGrid doesn't exist, replace the entire content
-                    Content = overlay;
+                    _statusOverlay.Tag = originalContent;
                 }
             }
             catch (Exception ex)
@@ -115,12 +115,15 @@ namespace VSPilot.UI.Windows
         {
             try
             {
-                if (_statusMessage != null && _statusMessage.Parent is Grid overlay)
+                if (_statusOverlay != null && Content == _statusOverlay)
                 {
-                    if (mainGrid != null && mainGrid.Children.Contains(overlay))
+                    // Restore the original content if we saved it
+                    if (_statusOverlay.Tag is UIElement originalContent)
                     {
-                        mainGrid.Children.Remove(overlay);
+                        Content = originalContent;
                     }
+
+                    _statusOverlay = null;
                     _statusMessage = null;
                 }
             }
@@ -140,7 +143,7 @@ namespace VSPilot.UI.Windows
                 StartInitializationTimeout();
 
                 // Initialize in the background to prevent UI freezing
-                Task.Run(async () =>
+                _ = Task.Run(async () =>
                 {
                     try
                     {
@@ -167,7 +170,7 @@ namespace VSPilot.UI.Windows
 
         private void StartInitializationTimeout()
         {
-            Task.Run(async () =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
