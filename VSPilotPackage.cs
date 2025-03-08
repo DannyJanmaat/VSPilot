@@ -227,8 +227,44 @@ namespace VSPilot
                 _ = _services.AddSingleton<IErrorHandler, ErrorHandler>();
                 _ = _services.AddSingleton<TestRunner>();
 
+                // Register GitHubCopilotService before VSPilotAIIntegration
+                if (dte != null)
+                {
+                    _ = _services.AddSingleton<GitHubCopilotService>(sp =>
+                    {
+                        var logger = sp.GetService<ILogger<GitHubCopilotService>>();
+                        if (logger == null)
+                        {
+                            // Create a logger if not available from DI
+                            var loggerFactory = sp.GetService<ILoggerFactory>();
+                            if (loggerFactory != null)
+                            {
+                                logger = loggerFactory.CreateLogger<GitHubCopilotService>();
+                            }
+                            else
+                            {
+                                // Create a minimal logger if factory not available
+                                logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubCopilotService>();
+                            }
+                        }
+                        return new GitHubCopilotService(logger, dte);
+                    });
+                    LogExtended("VSPilotPackage: GitHubCopilotService registered");
+                }
+                else
+                {
+                    LogExtended("VSPilotPackage: DTE not available, GitHubCopilotService will not be registered");
+                }
+
                 _ = _services.AddSingleton<AIRequestHandler>();
-                _ = _services.AddSingleton<VSPilotAIIntegration>();
+
+                // Register VSPilotAIIntegration with a factory method to handle the case when GitHubCopilotService is not available
+                _ = _services.AddSingleton<VSPilotAIIntegration>(sp =>
+                {
+                    var logger = sp.GetRequiredService<ILogger<VSPilotAIIntegration>>();
+                    var copilotService = sp.GetService<GitHubCopilotService>(); // This might be null
+                    return new VSPilotAIIntegration(logger, copilotService);
+                });
                 LogExtended("VSPilotPackage: AI components registered");
 
                 _ = _services.AddSingleton<AutomationService>();

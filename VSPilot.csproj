@@ -62,6 +62,7 @@
     <Compile Include="VSPilot.Core\AI\IVSPilotAIIntegration.cs" />
     <Compile Include="VSPilot.Core\AI\VSPilotIntegration.cs" />
     <Compile Include="VSPilot.Core\Build\MockTestPlatform.cs" />
+    <Compile Include="VSPilot.Core\Services\GitHubCopilotService.cs" />
     <Compile Include="VSPilot.UI\Dialogs\SettingsDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -113,7 +114,6 @@
     <Compile Include="VSPilot.Core\Abstractions\IVsSolutionContext.cs" />
     <Compile Include="VSPilot.Core\Adapters\VsSolutionAdapter.cs" />
     <Compile Include="VSPilot.Core\AI\AIRequestHandler.cs" />
-    <None Include="VSPilot.Core\AI\CopilotIntegration.cs.bak" />
     <Compile Include="VSPilot.Core\AI\LanguageProcessor.cs" />
     <Compile Include="VSPilot.Core\Automation\AutomationService.cs" />
     <Compile Include="VSPilot.Core\Automation\FileManager.cs" />
@@ -202,6 +202,7 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
+	<Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.13.40008" />

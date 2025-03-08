@@ -7,23 +7,40 @@ using System.Threading.Tasks;
 using VSPilot.Common.Exceptions;
 using VSPilot.Common.Models;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
+using VSPilot.Core.Services;
 
 namespace VSPilot.Core.AI
 {
-    public class VSPilotAIIntegration : IVSPilotAIIntegration
+    public class VSPilotAIIntegration
     {
         private readonly ILogger<VSPilotAIIntegration> _logger;
         private readonly HttpClient _httpClient;
         private readonly string _apiKey;
-        private const string API_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+        private const string OPENAI_API_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+        private const string ANTHROPIC_API_ENDPOINT = "https://api.anthropic.com/v1/messages";
         private readonly Queue<string> _analysisQueue = new Queue<string>();
         private bool _isProcessingQueue = false;
         private readonly SemaphoreSlim _queueSemaphore = new SemaphoreSlim(1, 1);
+        private readonly GitHubCopilotService _copilotService;
 
-        public VSPilotAIIntegration(ILogger<VSPilotAIIntegration> logger, string apiKey = null)
+        // AI provider enum
+        private enum AIProvider
+        {
+            OpenAI,
+            Anthropic,
+            GitHubCopilot,
+            Auto
+        }
+
+        public VSPilotAIIntegration(
+            ILogger<VSPilotAIIntegration> logger,
+            GitHubCopilotService copilotService,
+            string apiKey = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _copilotService = copilotService ?? throw new ArgumentNullException(nameof(copilotService));
             _apiKey = apiKey ?? Environment.GetEnvironmentVariable("VSPILOT_API_KEY") ?? string.Empty;
 
             _httpClient = new HttpClient();
@@ -41,8 +58,8 @@ namespace VSPilot.Core.AI
             {
                 _logger.LogInformation("Getting project changes for prompt");
 
-                // Call the AI service to get project changes
-                string response = await GetAIResponseAsync(prompt);
+                // For project changes, OpenAI is usually best
+                string response = await GetAIResponseAsync(prompt, AIProvider.OpenAI);
 
                 // Parse the response into ProjectChanges
                 return ParseProjectChanges(response);
@@ -54,69 +71,14 @@ namespace VSPilot.Core.AI
             }
         }
 
-        private async Task<string> GetCopilotResponseAsync(string prompt)
-        {
-            try
-            {
-                // Check if GitHub Copilot is enabled
-                string settingsPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "VSPilot",
-                    "settings.txt");
-
-                bool useCopilot = false;
-                if (File.Exists(settingsPath))
-                {
-                    string[] lines = File.ReadAllLines(settingsPath);
-                    foreach (string line in lines)
-                    {
-                        if (line.StartsWith("UseGitHubCopilot=true"))
-                        {
-                            useCopilot = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!useCopilot)
-                {
-                    return null;
-                }
-
-                // This is a placeholder for actual GitHub Copilot integration
-                // In a real implementation, you would use the GitHub Copilot API
-                // or integrate with the Visual Studio GitHub Copilot extension
-
-                _logger.LogInformation("Using GitHub Copilot for response");
-
-                // For now, just return a message indicating we would use Copilot
-                return "GitHub Copilot integration is not yet implemented. This would use the GitHub Copilot API in a real implementation.";
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to get Copilot response");
-                return null;
-            }
-        }
-
         public async Task<string> GetDirectResponseAsync(string prompt)
         {
             try
             {
                 _logger.LogInformation("Getting direct response for chat prompt");
 
-                // Try GitHub Copilot first if enabled
-                string copilotResponse = await GetCopilotResponseAsync(prompt);
-                if (!string.IsNullOrEmpty(copilotResponse))
-                {
-                    return copilotResponse;
-                }
-
-                // Format the prompt for chat
-                string chatPrompt = $"Respond to this user query in the context of a Visual Studio extension for code automation: {prompt}";
-
-                // Get the AI response
-                return await GetAIResponseAsync(chatPrompt);
+                // For chat responses, use Auto to pick the best provider
+                return await GetAIResponseAsync(prompt, AIProvider.Auto);
             }
             catch (Exception ex)
             {
@@ -125,7 +87,6 @@ namespace VSPilot.Core.AI
             }
         }
 
-        // Add the QueueVSPilotProjectAnalysis method
         public void QueueVSPilotProjectAnalysis(string projectName)
         {
             try
@@ -142,7 +103,6 @@ namespace VSPilot.Core.AI
                 _analysisQueue.Enqueue(projectName);
 
                 // Start processing if not already running
-                // Fix for VSTHRD110 - store the task or use FireAndForget extension
                 _ = Task.Run(ProcessAnalysisQueueAsync);
             }
             catch (Exception ex)
@@ -216,20 +176,14 @@ namespace VSPilot.Core.AI
         {
             try
             {
-                // This is a placeholder for the actual project analysis logic
-                // In a real implementation, you would analyze the project structure,
-                // code quality, potential improvements, etc.
-
+                // For project analysis, GitHub Copilot might be best if available
                 string prompt = $"Analyze project {projectName} and provide recommendations for improvements.";
 
                 // Get AI analysis
-                string analysis = await GetAIResponseAsync(prompt);
+                string analysis = await GetAIResponseAsync(prompt, AIProvider.Auto);
 
                 // Log the analysis results
                 _logger.LogInformation("Analysis for project {0}: {1}", projectName, analysis);
-
-                // In a real implementation, you might store the analysis results,
-                // display them to the user, or take automated actions based on the analysis
             }
             catch (Exception ex)
             {
@@ -238,87 +192,282 @@ namespace VSPilot.Core.AI
             }
         }
 
-        private async Task<string> GetAIResponseAsync(string prompt)
+        private async Task<string> GetAIResponseAsync(string prompt, AIProvider provider = AIProvider.Auto)
         {
-            // Check for OpenAI API key
-            string apiKey = _apiKey;
-            if (string.IsNullOrEmpty(apiKey))
+            // Determine which provider to use if Auto is specified
+            if (provider == AIProvider.Auto)
             {
-                apiKey = Environment.GetEnvironmentVariable("VSPILOT_API_KEY");
+                provider = DetermineOptimalProvider(prompt);
             }
 
-            // Check for Anthropic API key as a fallback
-            string anthropicKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+            // Check if the selected provider is available
+            if (!IsProviderAvailable(provider))
+            {
+                // Fall back to any available provider
+                provider = GetFirstAvailableProvider();
+            }
 
-            if (string.IsNullOrEmpty(apiKey) && string.IsNullOrEmpty(anthropicKey))
+            // If no providers are available, return an error message
+            if (provider == AIProvider.Auto)
             {
                 _logger.LogWarning("No API keys configured");
                 return "API key is not configured. Please set the VSPILOT_API_KEY environment variable or configure it in VSPilot Settings.";
             }
 
+            // Call the appropriate provider
+            return provider switch
+            {
+                AIProvider.OpenAI => await GetOpenAIResponseAsync(prompt),
+                AIProvider.Anthropic => await GetAnthropicResponseAsync(prompt),
+                AIProvider.GitHubCopilot => await GetCopilotResponseAsync(prompt),
+                _ => "No AI provider available. Please configure an API key in VSPilot Settings."
+            };
+        }
+
+        private AIProvider DetermineOptimalProvider(string prompt)
+        {
+            // Analyze the prompt to determine the best provider
+            // This is a simple implementation - you could make this more sophisticated
+
+            // For code generation, GitHub Copilot might be best
+            if (prompt.Contains("generate code") || prompt.Contains("write a function") ||
+                prompt.Contains("create a class") || prompt.Contains("implement"))
+            {
+                if (IsProviderAvailable(AIProvider.GitHubCopilot))
+                    return AIProvider.GitHubCopilot;
+            }
+
+            // For complex reasoning, Anthropic might be best
+            if (prompt.Contains("explain") || prompt.Contains("why") ||
+                prompt.Contains("how does") || prompt.Contains("analyze"))
+            {
+                if (IsProviderAvailable(AIProvider.Anthropic))
+                    return AIProvider.Anthropic;
+            }
+
+            // Default to OpenAI for general queries
+            if (IsProviderAvailable(AIProvider.OpenAI))
+                return AIProvider.OpenAI;
+
+            // If no specific provider is determined or available, return Auto
+            // to let the fallback logic handle it
+            return AIProvider.Auto;
+        }
+
+        private bool IsProviderAvailable(AIProvider provider)
+        {
+            switch (provider)
+            {
+                case AIProvider.OpenAI:
+                    return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("VSPILOT_API_KEY"));
+                case AIProvider.Anthropic:
+                    return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
+                case AIProvider.GitHubCopilot:
+                    // Check if GitHub Copilot is enabled in settings
+                    string settingsPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "VSPilot",
+                        "settings.txt");
+
+                    if (File.Exists(settingsPath))
+                    {
+                        string[] lines = File.ReadAllLines(settingsPath);
+                        foreach (string line in lines)
+                        {
+                            if (line.StartsWith("UseGitHubCopilot=true"))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        private AIProvider GetFirstAvailableProvider()
+        {
+            // Check each provider in order of preference
+            foreach (var provider in new[] { AIProvider.OpenAI, AIProvider.Anthropic, AIProvider.GitHubCopilot })
+            {
+                if (IsProviderAvailable(provider))
+                    return provider;
+            }
+
+            // If no provider is available, return Auto
+            return AIProvider.Auto;
+        }
+
+        private async Task<string> GetOpenAIResponseAsync(string prompt)
+        {
             try
             {
-                // Try OpenAI first if the key is available
-                if (!string.IsNullOrEmpty(apiKey))
+                string apiKey = Environment.GetEnvironmentVariable("VSPILOT_API_KEY");
+                if (string.IsNullOrEmpty(apiKey))
                 {
-                    var request = new
+                    _logger.LogWarning("OpenAI API key is not set");
+                    return "OpenAI API key is not configured.";
+                }
+
+                var request = new
+                {
+                    model = "gpt-4",
+                    messages = new[]
                     {
-                        model = "gpt-4",
-                        messages = new[]
-                        {
-                    new { role = "system", content = "You are a Visual Studio extension helping with code automation." },
-                    new { role = "user", content = prompt }
-                },
-                        temperature = 0.7,
-                        max_tokens = 2000
-                    };
+                        new { role = "system", content = "You are a Visual Studio extension helping with code automation and deployment." },
+                        new { role = "user", content = prompt }
+                    },
+                    temperature = 0.7,
+                    max_tokens = 2000
+                };
 
-                    // Set the authorization header
-                    _httpClient.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                // Set the authorization header
+                _httpClient.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
 
-                    var content = new StringContent(
-                        JsonSerializer.Serialize(request),
-                        Encoding.UTF8,
-                        "application/json");
+                var content = new StringContent(
+                    JsonSerializer.Serialize(request),
+                    Encoding.UTF8,
+                    "application/json");
 
-                    var response = await _httpClient.PostAsync(API_ENDPOINT, content);
-                    if (response.IsSuccessStatusCode)
+                var response = await _httpClient.PostAsync(OPENAI_API_ENDPOINT, content);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var responseObject = JsonSerializer.Deserialize<JsonElement>(responseBody);
+
+                // Extract the message content from the response
+                if (responseObject.TryGetProperty("choices", out var choices) &&
+                    choices.GetArrayLength() > 0 &&
+                    choices[0].TryGetProperty("message", out var message) &&
+                    message.TryGetProperty("content", out var content_value))
+                {
+                    return content_value.GetString();
+                }
+
+                return "Failed to parse OpenAI response.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get OpenAI response");
+                throw new AutomationException("Failed to get OpenAI response", ex);
+            }
+        }
+
+        private async Task<string> GetAnthropicResponseAsync(string prompt)
+        {
+            try
+            {
+                string apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    _logger.LogWarning("Anthropic API key is not set");
+                    return "Anthropic API key is not configured.";
+                }
+
+                var request = new
+                {
+                    model = "claude-3-opus-20240229",
+                    messages = new[]
                     {
-                        var responseBody = await response.Content.ReadAsStringAsync();
-                        var responseObject = JsonSerializer.Deserialize<JsonElement>(responseBody);
+                        new { role = "user", content = prompt }
+                    },
+                    max_tokens = 2000,
+                    temperature = 0.7
+                };
 
-                        // Extract the message content from the response
-                        if (responseObject.TryGetProperty("choices", out var choices) &&
-                            choices.GetArrayLength() > 0 &&
-                            choices[0].TryGetProperty("message", out var message) &&
-                            message.TryGetProperty("content", out var content_value))
+                // Set the Anthropic API key in the header
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Add("x-api-key", apiKey);
+                _httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+
+                var content = new StringContent(
+                    JsonSerializer.Serialize(request),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await _httpClient.PostAsync(ANTHROPIC_API_ENDPOINT, content);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var responseObject = JsonSerializer.Deserialize<JsonElement>(responseBody);
+
+                // Extract the message content from the response
+                if (responseObject.TryGetProperty("content", out var contentArray) &&
+                    contentArray.GetArrayLength() > 0 &&
+                    contentArray[0].TryGetProperty("text", out var text))
+                {
+                    return text.GetString();
+                }
+
+                return "Failed to parse Anthropic response.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get Anthropic response");
+                throw new AutomationException("Failed to get Anthropic response", ex);
+            }
+            finally
+            {
+                // Reset the headers for other API calls
+                _httpClient.DefaultRequestHeaders.Clear();
+            }
+        }
+
+        private async Task<string> GetCopilotResponseAsync(string prompt)
+        {
+            try
+            {
+                // If the Copilot service is not available, return null to fall back to other providers
+                if (_copilotService == null)
+                {
+                    _logger.LogWarning("GitHub Copilot service is not available");
+                    return null;
+                }
+
+                // Check if GitHub Copilot is enabled in settings
+                string settingsPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "VSPilot",
+                    "settings.txt");
+
+                bool useCopilot = false;
+                if (File.Exists(settingsPath))
+                {
+                    string[] lines = await Task.Run(() => File.ReadAllLines(settingsPath));
+                    foreach (string line in lines)
+                    {
+                        if (line.StartsWith("UseGitHubCopilot=true"))
                         {
-                            return content_value.GetString();
+                            useCopilot = true;
+                            break;
                         }
                     }
                 }
 
-                // Try Anthropic if OpenAI failed or key not available
-                if (!string.IsNullOrEmpty(anthropicKey))
+                if (!useCopilot)
                 {
-                    _logger.LogInformation("Using Anthropic API");
-
-                    // This is a placeholder for Anthropic API integration
-                    // In a real implementation, you would use the Anthropic API
-
-                    return "Anthropic API integration is not yet implemented. This would use the Anthropic API in a real implementation.";
+                    return null;
                 }
 
-                return "Failed to get AI response. Please check your API keys.";
+                // Check if GitHub Copilot is logged in
+                bool isLoggedIn = await _copilotService.IsCopilotLoggedInAsync();
+                if (!isLoggedIn)
+                {
+                    _logger.LogWarning("GitHub Copilot is not logged in");
+                    return null; // This will trigger the fallback to other providers
+                }
+
+                // Get completion from GitHub Copilot
+                return await _copilotService.GetCopilotCompletionAsync(prompt);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to get AI response");
-                throw new AutomationException("Failed to get AI response", ex);
+                _logger.LogError(ex, "Failed to get Copilot response");
+                return null;
             }
         }
-
 
         private ProjectChanges ParseProjectChanges(string response)
         {

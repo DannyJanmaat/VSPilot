@@ -1,9 +1,11 @@
-﻿// Create a new file: VSPilot.UI/Dialogs/SettingsDialog.cs
+﻿// VSPilot.UI/Dialogs/SettingsDialog.cs
 using System;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.VisualStudio.Shell;
+using VSPilot.Core.Services;
+using System.Threading.Tasks;
 
 namespace VSPilot.UI.Dialogs
 {
@@ -15,18 +17,28 @@ namespace VSPilot.UI.Dialogs
         private Button saveButton;
         private Button cancelButton;
         private Label statusLabel;
+        private Label copilotStatusLabel;
+        private Button loginButton;
+        private readonly GitHubCopilotService _copilotService;
 
-        public SettingsDialog()
+        public SettingsDialog(GitHubCopilotService copilotService = null)
         {
+            _copilotService = copilotService;
             InitializeComponent();
             LoadSettings();
+
+            // Start the async check but don't await it here
+            _ = Task.Run(async () =>
+            {
+                await CheckCopilotStatusAsync();
+            });
         }
 
         private void InitializeComponent()
         {
             this.Text = "VSPilot Settings";
             this.Width = 500;
-            this.Height = 300;
+            this.Height = 350; // Increased height to accommodate new controls
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -81,12 +93,35 @@ namespace VSPilot.UI.Dialogs
             };
             this.Controls.Add(useGitHubCopilotCheckBox);
 
+            // GitHub Copilot Status
+            copilotStatusLabel = new Label
+            {
+                Text = "GitHub Copilot status: Checking...",
+                Left = 20,
+                Top = 140,
+                Width = 300,
+                ForeColor = System.Drawing.Color.Gray
+            };
+            this.Controls.Add(copilotStatusLabel);
+
+            // Login Button
+            loginButton = new Button
+            {
+                Text = "Log In",
+                Left = 370,
+                Top = 135,
+                Width = 80,
+                Enabled = false
+            };
+            loginButton.Click += LoginButton_Click;
+            this.Controls.Add(loginButton);
+
             // Status Label
             statusLabel = new Label
             {
                 Text = "",
                 Left = 20,
-                Top = 180,
+                Top = 220,
                 Width = 430,
                 ForeColor = System.Drawing.Color.Red
             };
@@ -97,7 +132,7 @@ namespace VSPilot.UI.Dialogs
             {
                 Text = "Save",
                 Left = 300,
-                Top = 220,
+                Top = 270,
                 Width = 80
             };
             saveButton.Click += SaveButton_Click;
@@ -108,11 +143,129 @@ namespace VSPilot.UI.Dialogs
             {
                 Text = "Cancel",
                 Left = 390,
-                Top = 220,
+                Top = 270,
                 Width = 80
             };
             cancelButton.Click += CancelButton_Click;
             this.Controls.Add(cancelButton);
+
+            // Add a link to get API keys
+            LinkLabel getKeysLink = new LinkLabel
+            {
+                Text = "How to get API keys",
+                Left = 20,
+                Top = 180,
+                Width = 150
+            };
+            getKeysLink.LinkClicked += GetKeysLink_LinkClicked;
+            this.Controls.Add(getKeysLink);
+        }
+
+        private void GetKeysLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            try
+            {
+                Process.Start("https://platform.openai.com/api-keys");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error opening link: {ex.Message}");
+            }
+        }
+
+        private async Task CheckCopilotStatusAsync()
+        {
+            if (_copilotService == null)
+            {
+                copilotStatusLabel.Text = "GitHub Copilot status: Unknown (service not available)";
+                copilotStatusLabel.ForeColor = System.Drawing.Color.Gray;
+                loginButton.Enabled = false;
+                return;
+            }
+
+            try
+            {
+                bool isInstalled = await _copilotService.IsCopilotInstalledAsync();
+                if (!isInstalled)
+                {
+                    copilotStatusLabel.Text = "GitHub Copilot status: Not installed";
+                    copilotStatusLabel.ForeColor = System.Drawing.Color.Red;
+                    loginButton.Enabled = true;
+                    loginButton.Text = "Install";
+                    return;
+                }
+
+                bool isLoggedIn = await _copilotService.IsCopilotLoggedInAsync();
+                if (isLoggedIn)
+                {
+                    copilotStatusLabel.Text = "GitHub Copilot status: Logged in";
+                    copilotStatusLabel.ForeColor = System.Drawing.Color.Green;
+                    loginButton.Text = "Refresh Status";
+                }
+                else
+                {
+                    copilotStatusLabel.Text = "GitHub Copilot status: Not logged in";
+                    copilotStatusLabel.ForeColor = System.Drawing.Color.Red;
+                    loginButton.Text = "Log In";
+                }
+
+                loginButton.Enabled = true;
+            }
+            catch (Exception ex)
+            {
+                copilotStatusLabel.Text = $"GitHub Copilot status: Error checking";
+                copilotStatusLabel.ForeColor = System.Drawing.Color.Red;
+                Debug.WriteLine($"Error checking Copilot status: {ex.Message}");
+                loginButton.Enabled = false;
+            }
+        }
+
+        private void LoginButton_Click(object sender, EventArgs e)
+        {
+            if (_copilotService == null)
+            {
+                return;
+            }
+
+            try
+            {
+                loginButton.Enabled = false;
+                loginButton.Text = "Opening...";
+
+                if (loginButton.Text == "Install")
+                {
+                    // Open the GitHub Copilot installation page
+                    Process.Start("https://marketplace.visualstudio.com/items?itemName=GitHub.copilot");
+                }
+                else
+                {
+                    // Open the GitHub Copilot login page or trigger the login flow
+                    _copilotService.OpenCopilotLoginPage();
+                }
+
+                _copilotService.ResetCache();
+
+                // Re-enable the button after a short delay
+                var timer = new Timer
+                {
+                    Interval = 2000
+                };
+                timer.Tick += (s, args) => {
+                    _ = Task.Run(async () => await CheckCopilotStatusAsync());
+                    loginButton.Enabled = true;
+                    timer.Stop();
+                    timer.Dispose();
+                };
+                timer.Start();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error with Copilot login: {ex.Message}");
+                statusLabel.Text = $"Error with GitHub Copilot: {ex.Message}";
+                statusLabel.ForeColor = System.Drawing.Color.Red;
+                loginButton.Enabled = true;
+                loginButton.Text = "Log In";
+            }
         }
 
         private void LoadSettings()

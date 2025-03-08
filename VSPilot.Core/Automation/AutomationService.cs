@@ -116,7 +116,6 @@ namespace VSPilot.Core.Automation
                 throw new AutomationException($"Failed to process request: {ex.Message}", ex);
             }
         }
-
         private async Task<bool> BuildAndResolveErrorsAsync()
         {
             bool buildSuccess = false;
@@ -202,6 +201,29 @@ namespace VSPilot.Core.Automation
             {
                 _logger.LogError(ex, "Test execution failed");
                 return false;
+            }
+        }
+
+        public void QueueProjectAnalysis(string projectName)
+        {
+            try
+            {
+                _logger.LogInformation("Queuing project analysis from AutomationService: {0}", projectName);
+
+                // Delegate to the AI integration
+                if (_aiIntegration != null)
+                {
+                    _aiIntegration.QueueVSPilotProjectAnalysis(projectName);
+                    _logger.LogInformation("Project analysis queued successfully");
+                }
+                else
+                {
+                    _logger.LogWarning("AI Integration not available for project analysis");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to queue project analysis from AutomationService: {0}", projectName);
             }
         }
 

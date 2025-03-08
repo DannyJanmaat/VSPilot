@@ -25,7 +25,7 @@ namespace VSPilot.UI.Windows
         // Inline logger initialization to avoid CS0649
         private readonly ILogger<ChatWindow> _logger = NullLogger<ChatWindow>.Instance;
 
-        public ChatWindow() : base(null)
+        public ChatWindow() : base(VSPilotPackage.Instance)
         {
             Debug.WriteLine("ChatWindow: Constructor called");
             try
