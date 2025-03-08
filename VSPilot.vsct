@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+	<!--This is the file that defines the IDs for all the commands exposed by Visual Studio. -->
+	<Extern href="stdidcmd.h"/>
+
+	<!--This header contains the command ids for the menus provided by the shell. -->
+	<Extern href="vsshlids.h"/>
+
+	<!--The Commands section is where commands, menus, and menu groups are defined.
+      This section uses a Guid to identify the package that provides the command defined inside it. -->
+	<Commands package="guidVSPilotPackage">
+		<!-- Inside this section we have different sub-sections: one for the menus, another
+    for the menu groups, one for the buttons (the actual commands), one for the combos
+    and the last one for the bitmaps used. Each element is identified by a command id that
+    is a unique pair of guid and numeric identifier; the guid part of the identifier is usually
+    called "command set" and is used to group different command inside a logically related
+    group; the numeric part is a unique identifier inside the command set.
+
+    In this section we define the menus and commands for VSPilot -->
+
+		<!-- Menus section -->
+		<Menus>
+			<!-- VSPilot main menu - this will appear in the Extensions menu -->
+			<Menu guid="guidVSPilotCommandSet" id="VSPilotMenu" type="Menu" priority="0x0100">
+				<!-- Parent is the Extensions menu -->
+				<Parent guid="guidSHLMainMenu" id="IDG_VS_MM_TOOLSADDINS"/>
+				<Strings>
+					<ButtonText>VSPilot</ButtonText>
+					<CommandName>VSPilot</CommandName>
+				</Strings>
+			</Menu>
+		</Menus>
+
+		<!-- Groups section -->
+		<Groups>
+			<!-- This group contains commands inside the VSPilot menu -->
+			<Group guid="guidVSPilotCommandSet" id="VSPilotMenuGroup" priority="0x0600">
+				<Parent guid="guidVSPilotCommandSet" id="VSPilotMenu"/>
+			</Group>
+		</Groups>
+
+		<!-- Buttons section -->
+		<Buttons>
+			<!-- Chat window command button -->
+			<Button guid="guidVSPilotCommandSet" id="cmdidChatWindowCommand" priority="0x0100" type="Button">
+				<Parent guid="guidVSPilotCommandSet" id="VSPilotMenuGroup" />
+				<Icon guid="guidVSPilotImages" id="bmpChatIcon" />
+				<Strings>
+					<ButtonText>VSPilot Chat</ButtonText>
+					<CommandName>VSPilot.OpenChatWindow</CommandName>
+				</Strings>
+			</Button>
+
+			<!-- Settings command button -->
+			<Button guid="guidVSPilotCommandSet" id="cmdidSettingsCommand" priority="0x0101" type="Button">
+				<Parent guid="guidVSPilotCommandSet" id="VSPilotMenuGroup" />
+				<Icon guid="guidVSPilotImages" id="bmpSettingsIcon" />
+				<Strings>
+					<ButtonText>VSPilot Settings</ButtonText>
+					<CommandName>VSPilot.OpenSettings</CommandName>
+				</Strings>
+			</Button>
+		</Buttons>
+
+		<!-- Bitmaps section - images used for commands -->
+		<Bitmaps>
+			<!-- Use custom menu icons -->
+			<Bitmap guid="guidVSPilotImages" href="Resources\VSPilot_MenuIcons.png" usedList="bmpChatIcon, bmpSettingsIcon" />
+		</Bitmaps>
+	</Commands>
+
+	<!-- Symbol section - defines all the symbolic names used in the commands section -->
+	<Symbols>
+		<!-- Package guid - must match the GUID in VSPilotGuids.cs -->
+		<GuidSymbol name="guidVSPilotPackage" value="{49D5D9FC-73D5-40D8-A55B-65BB5BB32E05}" />
+
+		<!-- Command set guid - must match the GUID in VSPilotGuids.cs -->
+		<GuidSymbol name="guidVSPilotCommandSet" value="{DAB1FD00-90FB-48FA-A807-D4E79B582CF3}">
+			<!-- Command IDs - must match the values in VSPilotGuids.cs -->
+			<IDSymbol name="VSPilotMenu" value="0x2000" />
+			<IDSymbol name="VSPilotMenuGroup" value="0x1050" />
+			<IDSymbol name="cmdidChatWindowCommand" value="0x0100" />
+			<IDSymbol name="cmdidSettingsCommand" value="0x0101" />
+		</GuidSymbol>
+
+		<!-- Custom image GUID for menu icons -->
+		<GuidSymbol name="guidVSPilotImages" value="{0FA2DB60-9E32-4B37-9AA5-5BF89A0E3C34}">
+			<IDSymbol name="bmpChatIcon" value="1" />
+			<IDSymbol name="bmpSettingsIcon" value="2" />
+		</GuidSymbol>
+	</Symbols>
+</CommandTable>

@@ -1,0 +1,109 @@
+<UserControl x:Class="VSPilot.UI.Windows.ChatWindowControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             xmlns:converters="clr-namespace:VSPilot.UI.Converters">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+            <converters:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <SolidColorBrush x:Key="UserMessageBackground" Color="#E6F0FA"/>
+            <SolidColorBrush x:Key="AIMessageBackground" Color="White"/>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Chat history -->
+        <ScrollViewer Grid.Row="0" 
+                      x:Name="chatHistoryScroll" 
+                      Margin="5"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding ChatHistory}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="5,2" 
+                                Padding="10"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
+                                CornerRadius="3">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{StaticResource AIMessageBackground}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                            <Setter Property="Background" Value="{StaticResource UserMessageBackground}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Content, 
+                                            FallbackValue='No message', 
+                                            TargetNullValue='Empty message'}" 
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,5"/>
+                                <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm}', 
+                                            FallbackValue='--:--'}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                           HorizontalAlignment="Right"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Input area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox x:Name="chatInput"
+                     Grid.Column="0"
+                     Margin="5"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     MinHeight="50"
+                     MaxHeight="150"
+                     VerticalScrollBarVisibility="Auto"
+                     Text="{Binding UserInput, 
+                            Mode=TwoWay, 
+                            UpdateSourceTrigger=PropertyChanged}"
+                     IsEnabled="{Binding IsProcessing, 
+                                 Converter={StaticResource InverseBooleanConverter}}"/>
+
+            <StackPanel Grid.Column="1" 
+                        Orientation="Vertical"
+                        Margin="0,5,5,5">
+                <Button x:Name="sendButton"
+                        Content="Send"
+                        Width="75"
+                        Height="25"
+                        Margin="0,0,0,5"
+                        Command="{Binding SendMessageCommand}"
+                        IsEnabled="{Binding IsProcessing, 
+                                    Converter={StaticResource InverseBooleanConverter}}"
+                        ToolTip="Send message (Enter)"/>
+                <Button x:Name="clearButton"
+                        Content="Clear"
+                        Width="75"
+                        Height="25"
+                        Command="{Binding ClearCommand}"
+                        IsEnabled="{Binding IsProcessing, 
+                                    Converter={StaticResource InverseBooleanConverter}}"
+                        ToolTip="Clear chat input"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
