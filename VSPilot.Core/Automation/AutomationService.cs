@@ -50,6 +50,34 @@ namespace VSPilot.Core.Automation
             _logger.LogInformation("AutomationService initialized successfully");
         }
 
+        // New method that returns a string response for the chat window
+        public async Task<string> GetChatResponseAsync(string request)
+        {
+            if (string.IsNullOrWhiteSpace(request))
+            {
+                return "Please provide a valid request.";
+            }
+
+            try
+            {
+                // Get a direct response from the AI for chat purposes
+                var response = await _aiIntegration.GetDirectResponseAsync(request);
+
+                if (!string.IsNullOrEmpty(response))
+                {
+                    return response;
+                }
+
+                // Fallback to a generic response if AI integration fails
+                return "I've processed your request. If you'd like me to make changes to your project, please provide more specific instructions.";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get chat response");
+                return $"I encountered an error processing your request: {ex.Message}";
+            }
+        }
+
         public async Task ProcessRequestAsync(string request)
         {
             if (string.IsNullOrWhiteSpace(request))

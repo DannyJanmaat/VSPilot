@@ -135,15 +135,20 @@ namespace VSPilot.UI.ViewModels
         {
             try
             {
-                AddMessage(new ChatMessage
+                // Add processing message
+                var processingMessage = new ChatMessage
                 {
                     Content = "Processing your request...",
                     IsUser = false,
                     Timestamp = DateTime.Now
-                });
+                };
+                AddMessage(processingMessage);
 
                 if (_automationService == null)
                 {
+                    // Remove the processing message
+                    ChatHistory.Remove(processingMessage);
+
                     AddMessage(new ChatMessage
                     {
                         Content = "Error: AutomationService is not available. Please restart Visual Studio.",
@@ -153,14 +158,36 @@ namespace VSPilot.UI.ViewModels
                     return;
                 }
 
-                await _automationService.ProcessRequestAsync(message);
-
-                AddMessage(new ChatMessage
+                try
                 {
-                    Content = "Request processed successfully.",
-                    IsUser = false,
-                    Timestamp = DateTime.Now
-                });
+                    // Get a direct chat response
+                    string response = await _automationService.GetChatResponseAsync(message);
+
+                    // Remove the processing message
+                    ChatHistory.Remove(processingMessage);
+
+                    // Add the AI response
+                    AddMessage(new ChatMessage
+                    {
+                        Content = response,
+                        IsUser = false,
+                        Timestamp = DateTime.Now
+                    });
+                }
+                catch (Exception ex)
+                {
+                    // Remove the processing message
+                    ChatHistory.Remove(processingMessage);
+
+                    // Add error message
+                    AddMessage(new ChatMessage
+                    {
+                        Content = $"Error processing request: {ex.Message}",
+                        IsUser = false,
+                        Timestamp = DateTime.Now
+                    });
+                    _logger?.LogError(ex, "Error processing chat request");
+                }
             }
             catch (Exception ex)
             {
@@ -171,7 +198,6 @@ namespace VSPilot.UI.ViewModels
                     IsUser = false,
                     Timestamp = DateTime.Now
                 });
-                throw;
             }
         }
 

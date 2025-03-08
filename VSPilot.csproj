@@ -59,6 +59,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="VSPackage.Designer.cs" />
+    <Compile Include="VSPilot.Core\AI\IVSPilotAIIntegration.cs" />
+    <Compile Include="VSPilot.Core\AI\VSPilotIntegration.cs" />
     <Compile Include="VSPilot.Core\Build\MockTestPlatform.cs" />
     <Compile Include="VSPilot.UI\Windows\FrameControl.cs" />
     <Compile Include="VSPilotPackage.cs" />
@@ -108,7 +110,7 @@
     <Compile Include="VSPilot.Core\Abstractions\IVsSolutionContext.cs" />
     <Compile Include="VSPilot.Core\Adapters\VsSolutionAdapter.cs" />
     <Compile Include="VSPilot.Core\AI\AIRequestHandler.cs" />
-    <Compile Include="VSPilot.Core\AI\CopilotIntegration.cs" />
+    <None Include="VSPilot.Core\AI\CopilotIntegration.cs.bak" />
     <Compile Include="VSPilot.Core\AI\LanguageProcessor.cs" />
     <Compile Include="VSPilot.Core\Automation\AutomationService.cs" />
     <Compile Include="VSPilot.Core\Automation\FileManager.cs" />
@@ -142,7 +144,7 @@
     <Compile Include="VSPilot.Common\Models\VSPilotErrorItem.cs" />
     <Compile Include="VSPilot.Common\Models\VSPilotSettings.cs" />
     <Compile Include="VSPilot.Common\ViewModels\ViewModelBase.cs" />
-	<Compile Include="VSPilot.Common\Utilities\ConsoleHelper.cs" />
+    <Compile Include="VSPilot.Common\Utilities\ConsoleHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="VSPilot.Tests\AutomationTests\ProjectManagerTests.cs" />
