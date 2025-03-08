@@ -180,7 +180,7 @@ namespace VSPilot
                 catch (Exception)
                 {
                     LogExtended("ConfigurationService service is unavailable. Using default configuration service.");
-                    configurationService = new DefaultConfigurationService();
+                    configurationService = new DefaultConfigurationService(this); // Pass the current package instance
                 }
                 _services.AddSingleton(configurationService);
 
@@ -516,8 +516,8 @@ namespace VSPilot
     // with a null-forgiving AsyncPackage and a NullLogger instance.
     public class DefaultConfigurationService : ConfigurationService
     {
-        public DefaultConfigurationService()
-            : base(null!, NullLogger<ConfigurationService>.Instance)
+        public DefaultConfigurationService(AsyncPackage package)
+            : base(package, NullLogger<ConfigurationService>.Instance)
         {
         }
 
