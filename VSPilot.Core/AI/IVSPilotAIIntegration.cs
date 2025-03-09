@@ -8,5 +8,7 @@ namespace VSPilot.Core.AI
         Task<ProjectChanges> GetProjectChangesAsync(string prompt);
         Task<string> GetDirectResponseAsync(string prompt);
         void QueueVSPilotProjectAnalysis(string projectName);
+        void ClearConversationHistory();
+        Task RefreshSettingsAsync();
     }
 }

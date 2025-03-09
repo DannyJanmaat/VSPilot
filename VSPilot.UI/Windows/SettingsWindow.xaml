@@ -4,8 +4,9 @@
     xmlns:ui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:VSPilot.UI.Windows"
     Title="VSPilot Settings"
-    Height="500" 
+    Height="600" 
     Width="650"
     WindowStartupLocation="CenterOwner">
 
@@ -30,6 +31,112 @@
         <ScrollViewer Grid.Row="1" 
                       VerticalScrollBarVisibility="Auto">
             <StackPanel>
+                <!-- AI Provider Settings -->
+                <GroupBox Header="AI Provider Settings" 
+                          Margin="0,0,0,10"
+                          BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
+                    <StackPanel Margin="10">
+                        <TextBlock 
+                            Text="Select AI Provider:"
+                            Margin="0,5,0,5"/>
+
+                        <ComboBox 
+                            SelectedIndex="{Binding Settings.SelectedAIProvider, Mode=TwoWay}"
+                            Margin="0,0,0,10"
+                            Width="200"
+                            HorizontalAlignment="Left">
+                            <ComboBoxItem Content="GitHub Copilot" Tag="0"/>
+                            <ComboBoxItem Content="Anthropic Claude" Tag="1"/>
+                            <ComboBoxItem Content="OpenAI" Tag="2"/>
+                            <ComboBoxItem Content="Auto (Use available)" Tag="3"/>
+                        </ComboBox>
+
+                        <CheckBox 
+                            Content="Use GitHub Copilot (requires Visual Studio authentication)"
+                            IsChecked="{Binding Settings.UseGitHubCopilot}"
+                            ToolTip="Use GitHub Copilot when available"
+                            Margin="0,5"/>
+
+                        <Grid Margin="0,5,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock 
+                                Text="GitHub Copilot status:"
+                                Grid.Column="0"
+                                Grid.Row="0"
+                                VerticalAlignment="Center"
+                                Margin="0,0,10,0"/>
+
+                            <TextBlock 
+                                Text="{Binding CopilotStatus}"
+                                Grid.Column="1"
+                                Grid.Row="0"
+                                VerticalAlignment="Center"/>
+
+                            <Button 
+                                Content="Log In"
+                                Command="{Binding LogInToCopilotCommand}"
+                                Grid.Column="2"
+                                Grid.Row="0"
+                                Width="80"
+                                IsEnabled="{Binding IsCopilotLoginEnabled}"/>
+
+                            <TextBlock 
+                                Text="OpenAI API Key:"
+                                Grid.Column="0"
+                                Grid.Row="1"
+                                VerticalAlignment="Center"
+                                Margin="0,10,10,0"/>
+
+                            <PasswordBox 
+                                x:Name="OpenAIKeyBox"
+                                Grid.Column="1"
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Margin="0,10,0,0"
+                                PasswordChanged="OpenAIKeyBox_PasswordChanged"/>
+
+                            <TextBlock 
+                                Text="Anthropic API Key:"
+                                Grid.Column="0"
+                                Grid.Row="2"
+                                VerticalAlignment="Center"
+                                Margin="0,10,10,0"/>
+
+                            <PasswordBox 
+                                x:Name="AnthropicKeyBox"
+                                Grid.Column="1"
+                                Grid.Row="2"
+                                Grid.ColumnSpan="2"
+                                Margin="0,10,0,0"
+                                PasswordChanged="AnthropicKeyBox_PasswordChanged"/>
+                        </Grid>
+
+                        <CheckBox 
+                            Content="Automatically switch between AI providers when needed"
+                            IsChecked="{Binding Settings.AutoSwitchAIProviders}"
+                            ToolTip="Automatically use the best available AI provider for each task"
+                            Margin="0,10,0,5"/>
+
+                        <TextBlock>
+                            <Hyperlink NavigateUri="https://github.com/DannyJanmaat/VSPilot/wiki/API-Keys" 
+                                       RequestNavigate="Hyperlink_RequestNavigate">
+                                How to get API keys
+                            </Hyperlink>
+                        </TextBlock>
+                    </StackPanel>
+                </GroupBox>
+
+                <!-- Automation Settings -->
                 <GroupBox Header="Automation Settings" 
                           Margin="0,0,0,10"
                           BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
@@ -52,6 +159,7 @@
                     </StackPanel>
                 </GroupBox>
 
+                <!-- Error Handling -->
                 <GroupBox Header="Error Handling" 
                           Margin="0,10"
                           BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">
@@ -76,6 +184,7 @@
                     </StackPanel>
                 </GroupBox>
 
+                <!-- Logging -->
                 <GroupBox Header="Logging" 
                           Margin="0,10"
                           BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}">

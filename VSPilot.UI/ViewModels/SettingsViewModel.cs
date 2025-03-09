@@ -1,23 +1,28 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using VSPilot.Common.Models;
 using VSPilot.Common.Commands;
+using VSPilot.Common.Models;
 using VSPilot.Common.ViewModels;
 using VSPilot.Core.Services;
-using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 
 namespace VSPilot.UI.ViewModels
 {
     public class SettingsViewModel : ViewModelBase
     {
         private readonly ConfigurationService _configService;
+        private readonly GitHubCopilotService _copilotService;
         private readonly ILogger<SettingsViewModel> _logger;
 
         private VSPilotSettings _settings;
         private bool _hasUnsavedChanges;
         private bool _isLoading;
+        private bool _isLoaded;
+        private string _copilotStatus = "Unknown (service not detected)";
+        private bool _isCopilotLoginEnabled;
 
         public VSPilotSettings Settings
         {
@@ -32,6 +37,12 @@ namespace VSPilot.UI.ViewModels
                         HasUnsavedChanges = true;
                         LogExtended("SettingsViewModel: Marked as unsaved due to change in Settings");
                     }
+
+                    // Subscribe to settings property changes
+                    if (_settings != null)
+                    {
+                        _settings.PropertyChanged += Settings_PropertyChanged;
+                    }
                 }
             }
         }
@@ -42,7 +53,7 @@ namespace VSPilot.UI.ViewModels
             private set
             {
                 LogExtended($"SettingsViewModel: HasUnsavedChanges set to {value}");
-                SetProperty(ref _hasUnsavedChanges, value);
+                _ = SetProperty(ref _hasUnsavedChanges, value);
             }
         }
 
@@ -52,20 +63,54 @@ namespace VSPilot.UI.ViewModels
             private set
             {
                 LogExtended($"SettingsViewModel: IsLoading set to {value}");
-                SetProperty(ref _isLoading, value);
+                _ = SetProperty(ref _isLoading, value);
+            }
+        }
+
+        public bool IsLoaded
+        {
+            get => _isLoaded;
+            private set
+            {
+                LogExtended($"SettingsViewModel: IsLoaded set to {value}");
+                _ = SetProperty(ref _isLoaded, value);
+            }
+        }
+
+        public string CopilotStatus
+        {
+            get => _copilotStatus;
+            private set
+            {
+                LogExtended($"SettingsViewModel: CopilotStatus set to {value}");
+                _ = SetProperty(ref _copilotStatus, value);
+            }
+        }
+
+        public bool IsCopilotLoginEnabled
+        {
+            get => _isCopilotLoginEnabled;
+            private set
+            {
+                LogExtended($"SettingsViewModel: IsCopilotLoginEnabled set to {value}");
+                _ = SetProperty(ref _isCopilotLoginEnabled, value);
             }
         }
 
         public ICommand SaveCommand { get; }
         public ICommand ResetCommand { get; }
+        public ICommand LogInToCopilotCommand { get; private set; }
+        public ICommand OpenApiDocsCommand { get; private set; }
 
         public event EventHandler<string>? ErrorOccurred;
 
         public SettingsViewModel(
             ConfigurationService configService,
+            GitHubCopilotService copilotService,
             ILogger<SettingsViewModel> logger)
         {
             _configService = configService ?? throw new ArgumentNullException(nameof(configService));
+            _copilotService = copilotService ?? throw new ArgumentNullException(nameof(copilotService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             LogExtended("SettingsViewModel: Initializing default settings");
@@ -74,13 +119,22 @@ namespace VSPilot.UI.ViewModels
             LogExtended("SettingsViewModel: Creating commands");
             SaveCommand = new RelayCommand(async () => await SaveSettingsAsync(), CanSaveSettings);
             ResetCommand = new RelayCommand(async () => await ResetSettingsAsync(), CanResetSettings);
+            LogInToCopilotCommand = new RelayCommand(LogInToCopilotAsync, () => IsCopilotLoginEnabled);
+            OpenApiDocsCommand = new RelayCommand(OpenApiDocsAsync);
 
             LogExtended("SettingsViewModel: Starting asynchronous settings initialization");
             _ = InitializeSettingsAsync();
         }
 
-        private bool CanSaveSettings() => HasUnsavedChanges && !IsLoading;
-        private bool CanResetSettings() => !IsLoading;
+        private bool CanSaveSettings()
+        {
+            return HasUnsavedChanges && !IsLoading;
+        }
+
+        private bool CanResetSettings()
+        {
+            return !IsLoading;
+        }
 
         private async Task InitializeSettingsAsync()
         {
@@ -89,10 +143,15 @@ namespace VSPilot.UI.ViewModels
             {
                 IsLoading = true;
                 _logger.LogInformation("Loading settings asynchronously.");
-                var loadedSettings = await _configService.LoadSettingsAsync();
+                VSPilotSettings loadedSettings = await _configService.LoadSettingsAsync();
                 LogExtended("SettingsViewModel: Settings loaded from configuration service");
                 Settings = loadedSettings;
                 HasUnsavedChanges = false;
+
+                // Check GitHub Copilot status
+                await CheckCopilotStatusAsync();
+
+                IsLoaded = true;
             }
             catch (Exception ex)
             {
@@ -100,6 +159,7 @@ namespace VSPilot.UI.ViewModels
                 LogExtended($"SettingsViewModel: Exception while loading settings: {ex.Message}");
                 OnError($"Failed to load settings: {ex.Message}");
                 Settings = new VSPilotSettings();
+                IsLoaded = true;
             }
             finally
             {
@@ -108,16 +168,116 @@ namespace VSPilot.UI.ViewModels
             }
         }
 
+        private async Task CheckCopilotStatusAsync()
+        {
+            LogExtended("SettingsViewModel: CheckCopilotStatusAsync started");
+            try
+            {
+                bool isInstalled = await _copilotService.IsCopilotInstalledAsync();
+                if (!isInstalled)
+                {
+                    CopilotStatus = "Not installed";
+                    IsCopilotLoginEnabled = false;
+                    return;
+                }
+
+                bool isLoggedIn = await _copilotService.IsCopilotLoggedInAsync();
+                if (isLoggedIn)
+                {
+                    CopilotStatus = "Authenticated";
+                    IsCopilotLoginEnabled = false;
+                }
+                else
+                {
+                    CopilotStatus = "Not authenticated";
+                    IsCopilotLoginEnabled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to check Copilot status");
+                LogExtended($"SettingsViewModel: Exception while checking Copilot status: {ex.Message}");
+                CopilotStatus = $"Error: {ex.Message}";
+                IsCopilotLoginEnabled = false;
+            }
+            finally
+            {
+                LogExtended("SettingsViewModel: CheckCopilotStatusAsync completed");
+            }
+        }
+
+        public async Task LogInToCopilotAsync()
+        {
+            LogExtended("SettingsViewModel: LogInToCopilot started");
+            try
+            {
+                _copilotService.OpenCopilotLoginPage();
+                LogExtended("SettingsViewModel: Opened Copilot login page");
+
+                // Schedule a status check after a delay to see if login was successful
+                _ = Task.Delay(5000).ContinueWith(async _ =>
+                {
+                    await CheckCopilotStatusAsync();
+                }, System.Threading.Tasks.TaskScheduler.Default);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open Copilot login page");
+                LogExtended($"SettingsViewModel: Exception while opening Copilot login page: {ex.Message}");
+                OnError($"Failed to open GitHub Copilot login page: {ex.Message}");
+            }
+            await Task.CompletedTask;
+        }
+
+        public async Task OpenApiDocsAsync()
+        {
+            LogExtended("SettingsViewModel: OpenApiDocs started");
+            try
+            {
+                // Open documentation for API keys
+                _ = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://github.com/DannyJanmaat/VSPilot/wiki/API-Keys",
+                    UseShellExecute = true
+                });
+                LogExtended("SettingsViewModel: Opened API documentation");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open API documentation");
+                LogExtended($"SettingsViewModel: Exception while opening API documentation: {ex.Message}");
+                OnError($"Failed to open API documentation: {ex.Message}");
+            }
+            await Task.CompletedTask;
+        }
+
         private async Task SaveSettingsAsync()
         {
             LogExtended("SettingsViewModel: SaveSettingsAsync started");
             try
             {
                 _logger.LogInformation("Saving settings.");
+
+                // Validate API keys if they're being used
+                if (Settings.SelectedAIProvider == AIProvider.OpenAI &&
+                    !string.IsNullOrWhiteSpace(Settings.OpenAIApiKey))
+                {
+                    // TODO: Add validation for OpenAI API key
+                }
+
+                if (Settings.SelectedAIProvider == AIProvider.Anthropic &&
+                    !string.IsNullOrWhiteSpace(Settings.AnthropicApiKey))
+                {
+                    // TODO: Add validation for Anthropic API key
+                }
+
                 await _configService.SaveSettingsAsync(Settings);
                 HasUnsavedChanges = false;
                 _logger.LogInformation("Settings saved successfully");
                 LogExtended("SettingsViewModel: Settings saved successfully");
+
+                // Refresh Copilot status after saving
+                await CheckCopilotStatusAsync();
             }
             catch (Exception ex)
             {
@@ -151,6 +311,24 @@ namespace VSPilot.UI.ViewModels
             finally
             {
                 LogExtended("SettingsViewModel: ResetSettingsAsync completed");
+            }
+        }
+
+        private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (!_isLoading)
+            {
+                HasUnsavedChanges = true;
+                LogExtended($"SettingsViewModel: Settings property '{e.PropertyName}' changed, marked as unsaved");
+            }
+        }
+
+        public void NotifySettingsChanged()
+        {
+            if (!_isLoading)
+            {
+                HasUnsavedChanges = true;
+                LogExtended("SettingsViewModel: Settings changed via external notification");
             }
         }
 

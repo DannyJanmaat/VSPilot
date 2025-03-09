@@ -7,6 +7,7 @@ using VSPilot.Core.Services;
 using VSPilot.UI.ViewModels;
 using System.Windows.Controls;
 using System.Diagnostics;
+using System.Windows.Navigation;
 
 namespace VSPilot.UI.Windows
 {
@@ -14,9 +15,11 @@ namespace VSPilot.UI.Windows
     {
         private readonly SettingsViewModel _viewModel;
         private readonly ILogger<SettingsWindow>? _logger;
+        private bool _isInitializing = true;
 
         public SettingsWindow(
             ConfigurationService configService,
+            GitHubCopilotService copilotService,
             ILogger<SettingsViewModel> viewModelLogger,
             ILogger<SettingsWindow>? windowLogger = null)
         {
@@ -29,7 +32,7 @@ namespace VSPilot.UI.Windows
                 LogExtended("SettingsWindow: InitializeComponent completed");
 
                 // Create ViewModel
-                _viewModel = new SettingsViewModel(configService, viewModelLogger);
+                _viewModel = new SettingsViewModel(configService, copilotService, viewModelLogger);
                 base.DataContext = _viewModel; // Use base.DataContext instead of this.DataContext
                 LogExtended("SettingsWindow: ViewModel created and set as DataContext");
 
@@ -41,12 +44,103 @@ namespace VSPilot.UI.Windows
                 }; // Use Closed event instead of Closing
                 _viewModel.ErrorOccurred += OnViewModelError;
                 LogExtended("SettingsWindow: Subscribed to events");
+
+                // Initialize password boxes after ViewModel is loaded
+                _viewModel.PropertyChanged += (s, e) =>
+                {
+                    if (e.PropertyName == "IsLoaded" && _viewModel.IsLoaded)
+                    {
+                        InitializePasswordBoxes();
+                    }
+                };
+
+                this.Loaded += (s, e) =>
+                {
+                    LogExtended("SettingsWindow: Window loaded");
+                    _isInitializing = false;
+                };
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error initializing SettingsWindow");
                 LogExtended($"SettingsWindow: Exception in constructor: {ex.Message}");
                 HandleInitializationError(ex);
+            }
+        }
+
+        private void InitializePasswordBoxes()
+        {
+            LogExtended("SettingsWindow: Initializing password boxes");
+            try
+            {
+                // Set initial values for password boxes
+                if (!string.IsNullOrEmpty(_viewModel.Settings.OpenAIApiKey))
+                {
+                    OpenAIKeyBox.Password = _viewModel.Settings.OpenAIApiKey;
+                }
+
+                if (!string.IsNullOrEmpty(_viewModel.Settings.AnthropicApiKey))
+                {
+                    AnthropicKeyBox.Password = _viewModel.Settings.AnthropicApiKey;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error initializing password boxes");
+                LogExtended($"SettingsWindow: Exception in InitializePasswordBoxes: {ex.Message}");
+            }
+        }
+
+        private void OpenAIKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing) return;
+
+            LogExtended("SettingsWindow: OpenAI API key changed");
+            try
+            {
+                _viewModel.Settings.OpenAIApiKey = OpenAIKeyBox.Password;
+                _viewModel.NotifySettingsChanged();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error handling OpenAI API key change");
+                LogExtended($"SettingsWindow: Exception in OpenAIKeyBox_PasswordChanged: {ex.Message}");
+            }
+        }
+
+        private void AnthropicKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing) return;
+
+            LogExtended("SettingsWindow: Anthropic API key changed");
+            try
+            {
+                _viewModel.Settings.AnthropicApiKey = AnthropicKeyBox.Password;
+                _viewModel.NotifySettingsChanged();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error handling Anthropic API key change");
+                LogExtended($"SettingsWindow: Exception in AnthropicKeyBox_PasswordChanged: {ex.Message}");
+            }
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, RequestNavigateEventArgs e)
+        {
+            LogExtended($"SettingsWindow: Hyperlink navigation requested to {e.Uri}");
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = e.Uri.AbsoluteUri,
+                    UseShellExecute = true
+                });
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error navigating to URL: {Url}", e.Uri);
+                LogExtended($"SettingsWindow: Exception in Hyperlink_RequestNavigate: {ex.Message}");
             }
         }
 

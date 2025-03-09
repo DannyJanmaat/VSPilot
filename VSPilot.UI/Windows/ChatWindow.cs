@@ -25,20 +25,12 @@ namespace VSPilot.UI.Windows
         // Inline logger initialization to avoid CS0649
         private readonly ILogger<ChatWindow> _logger = NullLogger<ChatWindow>.Instance;
 
-        public ChatWindow() : base(VSPilotPackage.Instance)
+        public ChatWindow() : base(null)
         {
             Debug.WriteLine("ChatWindow: Constructor called");
-            try
-            {
-                this.Caption = "VSPilot Chat";
-                Debug.WriteLine("ChatWindow: Caption set to 'VSPilot Chat'");
-                Debug.WriteLine("ChatWindow: Constructor completed");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"ChatWindow: Exception in constructor: {ex.Message}");
-                Debug.WriteLine($"ChatWindow: Stack trace: {ex.StackTrace}");
-            }
+            // Set the caption (can be overriden later if needed)
+            this.Caption = "VSPilot Chat";
+            Debug.WriteLine("ChatWindow: Caption set to 'VSPilot Chat'");
         }
 
         protected override void Initialize()
