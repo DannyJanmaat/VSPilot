@@ -639,7 +639,7 @@ namespace VSPilot.Core.AI
                             {
                                 projectChanges.NewFiles.Add(new FileCreationInfo
                                 {
-                                    FilePath = currentFilePath,
+                                    Path = currentFilePath,
                                     Content = currentContent.ToString().Trim()
                                 });
 

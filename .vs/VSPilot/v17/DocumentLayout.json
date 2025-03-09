@@ -1,0 +1,173 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.vsct||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.vsct||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilotpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilotpackage.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.core\\ai\\vspilotintegration.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.core\\ai\\vspilotintegration.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.ui\\dialogs\\settingsdialog.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.ui\\dialogs\\settingsdialog.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.ui\\commands\\settingscommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.ui\\commands\\settingscommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.core\\services\\githubcopilotservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.core\\services\\githubcopilotservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.ui\\commands\\chatwindowcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.ui\\commands\\chatwindowcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.core\\build\\buildmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.core\\build\\buildmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|c:\\users\\dannyjanmaatitsynerg\\dev\\vspilot.core\\ai\\airequesthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6DF22318-1CC4-48CF-B064-282DF76E6D0E}|VSPilot.csproj|solutionrelative:vspilot.core\\ai\\airequesthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "VSPilot.vsct",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.vsct",
+              "RelativeDocumentMoniker": "VSPilot.vsct",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.vsct",
+              "RelativeToolTip": "VSPilot.vsct",
+              "ViewState": "AgIAADcAAAAAAAAAAAAhwEQAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003464|",
+              "WhenOpened": "2025-03-09T21:54:09.023Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "SettingsDialog.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Dialogs\\SettingsDialog.cs",
+              "RelativeDocumentMoniker": "VSPilot.UI\\Dialogs\\SettingsDialog.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Dialogs\\SettingsDialog.cs",
+              "RelativeToolTip": "VSPilot.UI\\Dialogs\\SettingsDialog.cs",
+              "ViewState": "AgIAAAoAAAAAAAAAAAAmwBcAAABEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:48.403Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "SettingsCommand.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Commands\\SettingsCommand.cs",
+              "RelativeDocumentMoniker": "VSPilot.UI\\Commands\\SettingsCommand.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Commands\\SettingsCommand.cs",
+              "RelativeToolTip": "VSPilot.UI\\Commands\\SettingsCommand.cs",
+              "ViewState": "AgIAABIAAAAAAAAAAAAmwB8AAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:46.02Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "GitHubCopilotService.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\Services\\GitHubCopilotService.cs",
+              "RelativeDocumentMoniker": "VSPilot.Core\\Services\\GitHubCopilotService.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\Services\\GitHubCopilotService.cs",
+              "RelativeToolTip": "VSPilot.Core\\Services\\GitHubCopilotService.cs",
+              "ViewState": "AgIAAKoAAAAAAAAAAAAmwLcAAAAqAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:44.266Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "ChatWindowCommand.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Commands\\ChatWindowCommand.cs",
+              "RelativeDocumentMoniker": "VSPilot.UI\\Commands\\ChatWindowCommand.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.UI\\Commands\\ChatWindowCommand.cs",
+              "RelativeToolTip": "VSPilot.UI\\Commands\\ChatWindowCommand.cs",
+              "ViewState": "AgIAACMAAAAAAAAAAAAmwDAAAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:43.08Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "VSPilotPackage.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilotPackage.cs",
+              "RelativeDocumentMoniker": "VSPilotPackage.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilotPackage.cs",
+              "RelativeToolTip": "VSPilotPackage.cs",
+              "ViewState": "AgIAAPcAAAAAAAAAAAAmwAYBAAATAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:38.615Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "VSPilotIntegration.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\AI\\VSPilotIntegration.cs",
+              "RelativeDocumentMoniker": "VSPilot.Core\\AI\\VSPilotIntegration.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\AI\\VSPilotIntegration.cs",
+              "RelativeToolTip": "VSPilot.Core\\AI\\VSPilotIntegration.cs",
+              "ViewState": "AgIAAHQCAAAAAAAAAAAmwIMCAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:41.509Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "BuildManager.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\Build\\BuildManager.cs",
+              "RelativeDocumentMoniker": "VSPilot.Core\\Build\\BuildManager.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\Build\\BuildManager.cs",
+              "RelativeToolTip": "VSPilot.Core\\Build\\BuildManager.cs",
+              "ViewState": "AgIAAOMAAAAAAAAAAAAmwPAAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:42.331Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "AIRequestHandler.cs",
+              "DocumentMoniker": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\AI\\AIRequestHandler.cs",
+              "RelativeDocumentMoniker": "VSPilot.Core\\AI\\AIRequestHandler.cs",
+              "ToolTip": "C:\\Users\\DannyJanmaatITSynerg\\Dev\\VSPilot.Core\\AI\\AIRequestHandler.cs",
+              "RelativeToolTip": "VSPilot.Core\\AI\\AIRequestHandler.cs",
+              "ViewState": "AgIAAFYBAAAAAAAAAAAmwGMBAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-03-09T21:51:40.346Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

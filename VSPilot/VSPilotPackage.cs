@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using VSPilot.Common.Interfaces;
+using VSPilot.Common.Models;
 using VSPilot.Common.Utilities;
 using VSPilot.Core.AI;
 using VSPilot.Core.Automation;
@@ -230,24 +231,18 @@ namespace VSPilot
                 // Register GitHubCopilotService before VSPilotAIIntegration
                 if (dte != null)
                 {
-                    _ = _services.AddSingleton<GitHubCopilotService>(sp =>
+                    _services.AddSingleton<GitHubCopilotService>(sp =>
                     {
                         var logger = sp.GetService<ILogger<GitHubCopilotService>>();
                         if (logger == null)
                         {
-                            // Create a logger if not available from DI
                             var loggerFactory = sp.GetService<ILoggerFactory>();
-                            if (loggerFactory != null)
-                            {
-                                logger = loggerFactory.CreateLogger<GitHubCopilotService>();
-                            }
-                            else
-                            {
-                                // Create a minimal logger if factory not available
-                                logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubCopilotService>();
-                            }
+                            logger = loggerFactory != null
+                                ? loggerFactory.CreateLogger<GitHubCopilotService>()
+                                : new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubCopilotService>();
                         }
-                        return new GitHubCopilotService(logger, dte);
+                        // Pass a default VSPilotSettings instance.
+                        return new GitHubCopilotService(logger, dte, new VSPilotSettings());
                     });
                     LogExtended("VSPilotPackage: GitHubCopilotService registered");
                 }
@@ -259,11 +254,12 @@ namespace VSPilot
                 _ = _services.AddSingleton<AIRequestHandler>();
 
                 // Register VSPilotAIIntegration with a factory method to handle the case when GitHubCopilotService is not available
-                _ = _services.AddSingleton<VSPilotAIIntegration>(sp =>
+                _services.AddSingleton<VSPilotAIIntegration>(sp =>
                 {
                     var logger = sp.GetRequiredService<ILogger<VSPilotAIIntegration>>();
-                    var copilotService = sp.GetService<GitHubCopilotService>(); // This might be null
-                    return new VSPilotAIIntegration(logger, copilotService);
+                    var configService = sp.GetRequiredService<ConfigurationService>();
+                    var copilotService = sp.GetService<GitHubCopilotService>(); // This might be null if not available
+                    return new VSPilotAIIntegration(logger, configService, copilotService);
                 });
                 LogExtended("VSPilotPackage: AI components registered");
 
